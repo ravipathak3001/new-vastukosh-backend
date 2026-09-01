@@ -83,7 +83,7 @@ module = new folder + one `register…()` call.
 | `payment`      | `PaymentProvider` interface + `MockProvider` (auto-confirm) + Razorpay stub + webhook |
 | `consultation` | `consultationServices`, `availableSlots`, `bookConsultation`     |
 | `marketing`    | `subscribeNewsletter`, `submitContactForm`                       |
-| `panchang`     | `panchang(date, latitude, longitude, timezone, monthSystem)` — wraps the standalone [`@vastukosh/panchang`](../packages/panchang) package (`file:` dependency) |
+| `panchang`     | `panchang(date, latitude, longitude, timezone, monthSystem)` — wraps the standalone [`vedic-panchanga`](https://www.npmjs.com/package/vedic-panchanga) npm package (source in `packages/panchang`) |
 
 ## Auth model (web + mobile)
 

@@ -1,10 +1,10 @@
-import { computePanchanga, type Panchanga } from "@vastukosh/panchang";
+import { computePanchanga, type Panchanga } from "vedic-panchanga";
 import { env } from "../../config/env.js";
 import { badInput } from "../../shared/errors.js";
 import type { LocalizedString } from "../../shared/localized.js";
 
 /**
- * Thin wrapper over `@vastukosh/panchang`. Resolves defaults from env, reshapes
+ * Thin wrapper over `vedic-panchanga`. Resolves defaults from env, reshapes
  * the library result into GraphQL-friendly views (localised `{ en, hi }` names,
  * `Date` instants) and memoises per (date, location, month-system) for an hour —
  * the computation is deterministic, so a same-day repeat query is free.

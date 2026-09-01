@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computePanchanga } from "@vastukosh/panchang";
+import { computePanchanga } from "vedic-panchanga";
 import { makeExecutor } from "./helpers.js";
 
 /**
- * Guards the GraphQL mapping, not the astronomy — `@vastukosh/panchang` has its
+ * Guards the GraphQL mapping, not the astronomy — `vedic-panchanga` has its
  * own accuracy tests. We check that the resolver reaches the library, localises
  * the names to `{ en, hi }`, and returns the values the library produced.
  */

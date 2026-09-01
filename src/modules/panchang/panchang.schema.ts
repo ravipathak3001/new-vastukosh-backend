@@ -51,7 +51,7 @@ const PanchangKaalaRef = builder.objectRef<PanchangKaalaView>("PanchangKaala").i
 
 const PanchangRef = builder.objectRef<PanchangView>("Panchang").implement({
   description:
-    "The Hindu almanac for one civil day at one place, computed by @vastukosh/panchang. Values are almanac-grade approximations — see the package's accuracy notes.",
+    "The Hindu almanac for one civil day at one place, computed by vedic-panchanga. Values are almanac-grade approximations — see the package's accuracy notes.",
   fields: (t) => ({
     date: t.exposeString("date", { description: "Resolved civil date, yyyy-mm-dd in `timezone`." }),
     timezone: t.exposeString("timezone"),

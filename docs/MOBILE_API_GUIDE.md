@@ -259,7 +259,8 @@ Auth scope: **public** = no token; **user** = valid access token; **admin** =
 
 ## 9. Panchang
 
-`@vastukosh/panchang` (a standalone package in this repo, `packages/panchang`)
+[`vedic-panchanga`](https://www.npmjs.com/package/vedic-panchanga) (a standalone
+published npm package; source in this repo under `packages/panchang`)
 computes the five aṅgas plus sun/moon rise & set, the lunar month, season, samvat
 years, sidereal signs, and the day's kālas. Values are **almanac-grade
 approximations** (Meeus algorithms, mean Lahiri ayanāṁśa) — good for display and

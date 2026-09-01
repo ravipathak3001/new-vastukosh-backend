@@ -260,7 +260,7 @@ type Page {
 }
 
 """
-The Hindu almanac for one civil day at one place, computed by @vastukosh/panchang. Values are almanac-grade approximations — see the package's accuracy notes.
+The Hindu almanac for one civil day at one place, computed by vedic-panchanga. Values are almanac-grade approximations — see the package's accuracy notes.
 """
 type Panchang {
   auspiciousPeriods: [PanchangKaala!]
