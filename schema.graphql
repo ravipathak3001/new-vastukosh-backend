@@ -1,0 +1,611 @@
+type Address {
+  city: String
+  firstName: String
+  id: ID
+  isDefault: Boolean
+  label: String
+  lastName: String
+  line1: String
+  line2: String
+  phone: String
+  pincode: String
+  state: String
+}
+
+input AddressInput {
+  city: String!
+  firstName: String!
+  isDefault: Boolean
+  label: String
+  lastName: String
+  line1: String!
+  line2: String
+  phone: String
+  pincode: String!
+  state: String!
+}
+
+"""
+Returned by signup/login/refreshToken. Web clients also receive the refresh token in an httpOnly cookie; native clients must persist `refreshToken` themselves.
+"""
+type AuthPayload {
+  accessToken: String
+  accessTokenExpiresIn: Int
+  refreshToken: String
+  refreshTokenExpiresAt: DateTime
+  user: User
+}
+
+type BirthDetails {
+  date: String
+  place: String
+  rashiSlug: String
+  time: String
+}
+
+input BookConsultationInput {
+  birthDetails: ConsultationBirthDetailsInput
+  date: String!
+  email: String!
+  name: String!
+  notes: String
+  phone: String
+  serviceKey: ConsultationServiceKey!
+  slot: String!
+}
+
+type Cart {
+  id: ID
+  itemCount: Int
+  items: [CartLineItem!]
+  totals: CartTotals
+}
+
+type CartLineItem {
+  image: String
+  lineTotal: Float
+  name: LocalizedString
+  productSlug: String
+  qty: Int
+  unitPrice: Float
+}
+
+type CartTotals {
+  discount: Float
+  promoCode: String
+  shipping: Float
+  subtotal: Float
+  total: Float
+}
+
+type Collection {
+  description: LocalizedString
+  heroImage: String
+  products: [Product!]
+  seo: ResolvedSeo
+  slug: String
+  title: LocalizedString
+}
+
+input ConsultationBirthDetailsInput {
+  date: String
+  place: String
+  time: String
+}
+
+type ConsultationBooking {
+  date: String
+  email: String
+  id: ID
+  name: String
+  serviceKey: ConsultationServiceKey
+  slot: String
+  status: String
+}
+
+type ConsultationService {
+  durationMins: Int
+  icon: String
+  key: ConsultationServiceKey
+  meta: LocalizedString
+  name: LocalizedString
+  price: Float
+}
+
+enum ConsultationServiceKey {
+  astro
+  gem
+  vastu
+}
+
+input ContactInput {
+  email: String!
+  message: String!
+  name: String!
+  phone: String
+  subject: String
+}
+
+"""
+A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `date-time` format outlined in section 5.6 of the RFC 3339 profile of the ISO 8601 standard for representation of dates and times using the Gregorian calendar.
+"""
+scalar DateTime
+
+type Faq {
+  answer: LocalizedString
+  id: ID
+  order: Int
+  question: LocalizedString
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type LegalDoc {
+  effectiveDate: DateTime
+  sections: [LegalSection!]
+  seo: ResolvedSeo
+  slug: String
+  title: LocalizedString
+}
+
+type LegalSection {
+  body: LocalizedString
+  heading: LocalizedString
+}
+
+type LocalizedString {
+  en: String
+  hi: String
+}
+
+input LocalizedStringInput {
+  en: String!
+  hi: String!
+}
+
+input LoginInput {
+  anonId: String
+  email: String!
+  password: String!
+}
+
+type Mutation {
+  addAddress(input: AddressInput!): User
+  addToCart(anonId: String, productSlug: String!, qty: Int): Cart
+  advanceOrderStatus(note: String, orderNo: String!, status: OrderStatus!): Order
+  applyPromo(anonId: String, code: String!): Cart
+  archiveProduct(slug: String!): Product
+  bookConsultation(input: BookConsultationInput!): ConsultationBooking
+  cancelOrder(anonId: String, orderNo: String!): Order
+  clearPromo(anonId: String): Cart
+  login(input: LoginInput!): AuthPayload
+  logout(everywhere: Boolean, refreshToken: String): Boolean
+  placeOrder(input: PlaceOrderInput!): PlaceOrderResult
+  refreshToken(refreshToken: String): AuthPayload
+  removeAddress(addressId: ID!): User
+  removeFromCart(anonId: String, productSlug: String!): Cart
+  setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
+  setCartItemQty(anonId: String, productSlug: String!, qty: Int!): Cart
+  signup(input: SignupInput!): AuthPayload
+  submitContactForm(input: ContactInput!): MutationOk
+  subscribeNewsletter(email: String!, source: String): MutationOk
+  updateAddress(addressId: ID!, input: AddressInput!): User
+  updateProfile(localePref: String, name: String, phone: String): User
+  upsertProduct(input: ProductInput!): Product
+}
+
+type MutationOk {
+  ok: Boolean
+}
+
+type Order {
+  createdAt: DateTime
+  currency: String
+  discount: Float
+  email: String
+  id: ID
+  items: [OrderItem!]
+  orderNo: String
+  payment: OrderPayment
+  promoCode: String
+  shippingAddress: Address
+  shippingFee: Float
+  status: OrderStatus
+  subtotal: Float
+  timeline: [OrderTimelineEntry!]
+  total: Float
+}
+
+type OrderItem {
+  image: String
+  lineTotal: Float
+  name: LocalizedString
+  productSlug: String
+  qty: Int
+  unitPrice: Float
+}
+
+type OrderPayment {
+  method: PaymentMethod
+  provider: String
+  providerRef: String
+  status: String
+}
+
+enum OrderStatus {
+  cancelled
+  consecration
+  delivered
+  in_transit
+  packed
+  paid
+  pending_payment
+  refunded
+}
+
+type OrderTimelineEntry {
+  at: DateTime
+  note: String
+  status: OrderStatus
+}
+
+type Page {
+  blocks: JSON
+  key: String
+  path: String
+  seo: ResolvedSeo
+}
+
+"""
+The Hindu almanac for one civil day at one place, computed by @vastukosh/panchang. Values are almanac-grade approximations — see the package's accuracy notes.
+"""
+type Panchang {
+  auspiciousPeriods: [PanchangKaala!]
+
+  """Ayanamsa used, in degrees."""
+  ayanamsa: Float
+  ayanamsaSystem: String
+
+  """Resolved civil date, yyyy-mm-dd in `timezone`."""
+  date: String
+  inauspiciousPeriods: [PanchangKaala!]
+  karana: PanchangAnga
+  location: PanchangLocation
+
+  """Lunar month per the requested monthSystem."""
+  masa: LocalizedString
+  masaAmanta: LocalizedString
+  masaPurnimanta: LocalizedString
+
+  """Sidereal rashi of the Moon (janma rashi of the day)."""
+  moonSign: LocalizedString
+  moonrise: DateTime
+  moonset: DateTime
+  nakshatra: PanchangAnga
+
+  """End of the vara."""
+  nextSunrise: DateTime
+  paksha: LocalizedString
+
+  """Season."""
+  ritu: LocalizedString
+  shakaSamvat: Int
+  solarNoon: DateTime
+
+  """Sidereal rashi of the Sun."""
+  sunSign: LocalizedString
+  sunrise: DateTime
+  sunset: DateTime
+  timezone: String
+  tithi: PanchangAnga
+  vara: PanchangAnga
+  vikramSamvat: Int
+  yoga: PanchangAnga
+}
+
+"""
+One limb of the panchang (tithi, nakshatra, yoga, karana or vara) as it stands at sunrise, with the window it occupies.
+"""
+type PanchangAnga {
+  end: DateTime
+
+  """Fraction of this limb already elapsed at the query instant, 0–1."""
+  fractionElapsed: Float
+
+  """
+  1-based position in its cycle (tithi 1–30, nakshatra/yoga 1–27, karana 1–11, vara 1–7).
+  """
+  index: Int
+
+  """Vimshottari lord of the nakshatra; null for other limbs."""
+  lord: String
+  name: LocalizedString
+
+  """Nakshatra quarter 1–4; null for other limbs."""
+  pada: Int
+  start: DateTime
+}
+
+"""A named window of the day — a muhurta or a kaala."""
+type PanchangKaala {
+  end: DateTime
+  name: LocalizedString
+
+  """"auspicious" | "inauspicious"."""
+  quality: String
+  start: DateTime
+}
+
+type PanchangLocation {
+  latitude: Float
+  longitude: Float
+  place: String
+}
+
+enum PanchangMonthSystem {
+  amanta
+  purnimanta
+}
+
+enum PaymentMethod {
+  card
+  cod
+  netbanking
+  upi
+}
+
+input PlaceOrderInput {
+  anonId: String
+  email: String!
+  paymentMethod: PaymentMethod!
+  shippingAddress: ShippingAddressInput!
+}
+
+type PlaceOrderResult {
+  clientData: JSON
+  order: Order
+}
+
+type Product {
+  category: ProductCategory
+  currency: String
+  description: LocalizedString
+  details: [ProductDetail!]
+  featured: Boolean
+  gallery: [String!]
+  highlights: [LocalizedString!]
+  id: ID
+  image: String
+  mrp: Float
+  name: LocalizedString
+  needs: [ProductNeed!]
+  price: Float
+  rashis: [String!]
+  rating: Float
+  relatedProducts(limit: Int): [Product!]
+  reviewsCount: Int
+  seo: ResolvedSeo
+  slug: String
+  tagline: LocalizedString
+}
+
+enum ProductCategory {
+  crystals
+  idols
+  malas
+  vastukits
+  yantras
+}
+
+type ProductDetail {
+  body: LocalizedString
+  title: LocalizedString
+}
+
+input ProductFilterInput {
+  category: ProductCategory
+  featured: Boolean
+  need: ProductNeed
+  rashi: String
+  search: String
+}
+
+input ProductInput {
+  category: ProductCategory
+  description: JSON
+  featured: Boolean
+  gallery: [String!]
+  image: String
+  mrp: Float
+  name: JSON
+  needs: [ProductNeed!]
+  price: Float
+  rashis: [String!]
+  seo: SeoMetaInput
+  slug: String!
+  tagline: JSON
+}
+
+enum ProductNeed {
+  business
+  newhome
+  peace
+  prosperity
+  vehicle
+}
+
+type ProductPage {
+  hasMore: Boolean
+  items: [Product!]
+  total: Int
+}
+
+enum ProductSort {
+  newest
+  price_asc
+  price_desc
+  rating
+  recommended
+}
+
+type Query {
+  availableSlots(date: String!): [String!]
+  cart(anonId: String): Cart
+  collection(slug: String!): Collection
+  collections: [Collection!]
+  consultationServices: [ConsultationService!]
+  faqs: [Faq!]
+  featuredProducts(limit: Int): [Product!]
+  legalDoc(slug: String!): LegalDoc
+  legalDocs: [LegalDoc!]
+  me: User
+  myOrders: [Order!]
+  order(orderNo: String!): Order
+  page(key: String!): Page
+
+  """
+  Today's panchang (or `date`'s) for a location. All args are optional; unset location falls back to the server's configured default (New Delhi).
+  """
+  panchang(
+    """Civil date as yyyy-mm-dd. Defaults to today in `timezone`."""
+    date: String
+
+    """North positive. Default from server config."""
+    latitude: Float
+
+    """East positive. Default from server config."""
+    longitude: Float
+
+    """Drives `masa`. Default amanta."""
+    monthSystem: PanchangMonthSystem
+
+    """IANA timezone id. Default Asia/Kolkata."""
+    timezone: String
+  ): Panchang
+  product(slug: String!): Product
+  products(filter: ProductFilterInput, limit: Int, offset: Int, sort: ProductSort): ProductPage
+  rashi(slug: String!): Rashi
+  rashis: [Rashi!]
+  redirects: [Redirect!]
+  relatedProducts(limit: Int, slug: String!): [Product!]
+  seoForPath(path: String!): ResolvedSeo
+  siteSettings: SiteSettings
+  sitemapEntries(baseUrl: String): [SitemapEntry!]
+  testimonials(featuredOnly: Boolean): [Testimonial!]
+}
+
+type Rashi {
+  image: String
+  name: LocalizedString
+  order: Int
+  slug: String
+  symbol: String
+  western: String
+}
+
+type Redirect {
+  from: String
+  statusCode: Int
+  to: String
+}
+
+"""SEO metadata with all fallbacks applied — safe to render directly."""
+type ResolvedSeo {
+  canonicalPath: String
+  description: LocalizedString
+  keywords: [String!]
+  noindex: Boolean
+  ogImage: String
+  structuredData: JSON
+  title: LocalizedString
+}
+
+input SeoMetaInput {
+  canonicalPath: String
+  keywords: [String!]
+  metaDescription: LocalizedStringInput
+  metaTitle: LocalizedStringInput
+  noindex: Boolean
+  ogImage: String
+}
+
+input ShippingAddressInput {
+  city: String!
+  firstName: String!
+  lastName: String
+  line1: String!
+  line2: String
+  phone: String
+  pincode: String!
+  state: String!
+}
+
+input SignupInput {
+  anonId: String
+  email: String!
+  name: String!
+  password: String!
+  phone: String
+  referredBy: String
+}
+
+type SiteSettings {
+  addressText: String
+  domain: String
+  email: String
+  legalName: String
+  logoUrl: String
+  name: String
+  phone: String
+  sameAs: [String!]
+  socials: [SocialLink!]
+}
+
+type SitemapAlternate {
+  href: String
+  hreflang: String
+}
+
+type SitemapEntry {
+  alternates: [SitemapAlternate!]
+  changefreq: String
+  lastmod: String
+  loc: String
+  path: String
+  priority: Float
+}
+
+type SocialLink {
+  href: String
+  icon: String
+  label: String
+}
+
+type Testimonial {
+  featured: Boolean
+  id: ID
+  image: String
+  meta: LocalizedString
+  name: String
+  quote: LocalizedString
+  rating: Int
+  wide: Boolean
+}
+
+type User {
+  addresses: [Address!]
+  birthDetails: BirthDetails
+  createdAt: DateTime
+  email: String
+  emailVerified: Boolean
+  id: ID
+  karmaPoints: Int
+  localePref: String
+  name: String
+  phone: String
+  referralCode: String
+  roles: [String!]
+}

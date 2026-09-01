@@ -1,0 +1,30 @@
+# Local MongoDB for development. `docker compose up -d` then `npm run seed`.
+# In production, skip this and point MONGODB_URI at a managed cluster (Atlas).
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - vastukosh-mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional web UI at http://localhost:8081
+  mongo-express:
+    image: mongo-express:1.0.2-20
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      - mongo
+
+volumes:
+  vastukosh-mongo:
