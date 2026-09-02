@@ -10,12 +10,14 @@ import { makeExecutor } from "./helpers.js";
 const gql = makeExecutor();
 
 const QUERY = `
-  query ($date: String, $lat: Float, $lng: Float) {
-    panchang(date: $date, latitude: $lat, longitude: $lng, timezone: "Asia/Kolkata") {
+  query ($date: String, $time: String, $lat: Float, $lng: Float) {
+    panchang(date: $date, time: $time, latitude: $lat, longitude: $lng, timezone: "Asia/Kolkata") {
       date
+      reference { kind instant }
+      currentPeriods { name { en } start end quality }
       location { latitude longitude place }
       vara { index name { en hi } start end }
-      tithi { index name { en } start end }
+      tithi { index name { en } start end fractionElapsed }
       nakshatra { index name { en } pada lord }
       yoga { index name { en } }
       karana { index name { en } }
@@ -64,6 +66,46 @@ describe("panchang query", () => {
     expect(new Date(p.tithi.end).getTime()).toBe(lib.tithi.end.getTime());
     expect(new Date(p.sunrise).getTime()).toBe(lib.sunrise.getTime());
     expect(p.ayanamsa).toBeCloseTo(lib.ayanamsa, 6);
+  });
+
+  it("without `time`, evaluates at sunrise", async () => {
+    const res = await gql(QUERY, { date: "2024-04-08", ...DELHI });
+    const p = res.data.panchang;
+    expect(p.reference.kind).toBe("sunrise");
+    expect(new Date(p.reference.instant).getTime()).toBe(new Date(p.sunrise).getTime());
+    expect(p.currentPeriods).toEqual([]);
+  });
+
+  it("with `time`, measures the aṅgas at that wall-clock instant", async () => {
+    const res = await gql(QUERY, { date: "2024-04-08", time: "14:30", ...DELHI });
+    expect(res.errors).toBeUndefined();
+    const p = res.data.panchang;
+
+    const lib = computePanchanga({
+      date: new Date("2024-04-08T12:00:00Z"),
+      time: "14:30",
+      latitude: DELHI.lat,
+      longitude: DELHI.lng,
+      timezone: "Asia/Kolkata",
+    });
+
+    expect(p.reference.kind).toBe("time");
+    expect(new Date(p.reference.instant).getTime()).toBe(lib.reference.instant.getTime());
+    expect(p.tithi.index).toBe(lib.tithi.index);
+    expect(p.tithi.fractionElapsed).toBeCloseTo(lib.tithi.fractionElapsed, 6);
+    expect(p.currentPeriods.map((k: { name: { en: string } }) => k.name.en)).toEqual(
+      lib.currentPeriods.map((k) => k.name.iast),
+    );
+    for (const k of p.currentPeriods) {
+      const t = new Date(p.reference.instant).getTime();
+      expect(new Date(k.start).getTime()).toBeLessThanOrEqual(t);
+      expect(new Date(k.end).getTime()).toBeGreaterThanOrEqual(t);
+    }
+  });
+
+  it("rejects a malformed time", async () => {
+    const res = await gql(QUERY, { date: "2024-04-08", time: "2:30 pm", ...DELHI });
+    expect(res.errors?.[0]?.extensions?.code).toBe("BAD_INPUT");
   });
 
   it("names the three inauspicious kaalas and keeps them inside the day", async () => {

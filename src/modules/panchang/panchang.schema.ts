@@ -5,6 +5,7 @@ import {
   type PanchangView,
   type PanchangAngaView,
   type PanchangKaalaView,
+  type PanchangReferenceView,
 } from "./panchang.service.js";
 
 const MonthSystemEnum = builder.enumType("PanchangMonthSystem", {
@@ -39,6 +40,18 @@ const PanchangAngaRef = builder.objectRef<PanchangAngaView>("PanchangAnga").impl
   }),
 });
 
+const PanchangReferenceRef = builder
+  .objectRef<PanchangReferenceView>("PanchangReference")
+  .implement({
+    description: "The instant the aṅgas, sidereal signs and `fractionElapsed` figures were evaluated at.",
+    fields: (t) => ({
+      kind: t.exposeString("kind", {
+        description: '"sunrise" (the almanac default) or "time" when a `time` arg was supplied.',
+      }),
+      instant: t.field({ type: "DateTime", resolve: (r) => r.instant }),
+    }),
+  });
+
 const PanchangKaalaRef = builder.objectRef<PanchangKaalaView>("PanchangKaala").implement({
   description: "A named window of the day — a muhurta or a kaala.",
   fields: (t) => ({
@@ -58,6 +71,13 @@ const PanchangRef = builder.objectRef<PanchangView>("Panchang").implement({
     location: t.field({ type: PanchangLocationRef, resolve: (p) => p.location }),
     ayanamsaSystem: t.exposeString("ayanamsaSystem"),
     ayanamsa: t.exposeFloat("ayanamsa", { description: "Ayanamsa used, in degrees." }),
+
+    reference: t.field({
+      type: PanchangReferenceRef,
+      resolve: (p) => p.reference,
+      description:
+        "Which instant the aṅgas below reflect — the day's sunrise unless a `time` arg was given.",
+    }),
 
     sunrise: t.field({ type: "DateTime", resolve: (p) => p.sunrise }),
     sunset: t.field({ type: "DateTime", resolve: (p) => p.sunset }),
@@ -85,6 +105,12 @@ const PanchangRef = builder.objectRef<PanchangView>("Panchang").implement({
 
     auspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.auspiciousPeriods }),
     inauspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.inauspiciousPeriods }),
+    currentPeriods: t.field({
+      type: [PanchangKaalaRef],
+      resolve: (p) => p.currentPeriods,
+      description:
+        "Auspicious/inauspicious windows containing `reference.instant`. Empty in sunrise mode; the \"what's running now\" answer when `time` is given.",
+    }),
   }),
 });
 
@@ -99,6 +125,11 @@ export function registerPanchangModule() {
           required: false,
           description: "Civil date as yyyy-mm-dd. Defaults to today in `timezone`.",
         }),
+        time: t.arg.string({
+          required: false,
+          description:
+            "Wall-clock time of day as HH:MM or HH:MM:SS (24-hour), read in `timezone`. When set, the aṅgas, sidereal signs and `fractionElapsed` are measured at that instant instead of at sunrise, and `currentPeriods` is populated. Use for a birth time or a \"right now\" lookup.",
+        }),
         latitude: t.arg.float({ required: false, description: "North positive. Default from server config." }),
         longitude: t.arg.float({ required: false, description: "East positive. Default from server config." }),
         timezone: t.arg.string({ required: false, description: "IANA timezone id. Default Asia/Kolkata." }),
@@ -107,6 +138,7 @@ export function registerPanchangModule() {
       resolve: (_parent, args) =>
         getPanchang({
           date: args.date,
+          time: args.time,
           latitude: args.latitude,
           longitude: args.longitude,
           timezone: args.timezone,

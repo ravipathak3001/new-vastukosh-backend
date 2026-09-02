@@ -11,6 +11,7 @@ import type { LocalizedString } from "../../shared/localized.js";
  */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const WALL_TIME = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const TTL_MS = 60 * 60 * 1000;
 
 export type PanchangAngaView = {
@@ -30,12 +31,20 @@ export type PanchangKaalaView = {
   quality: "auspicious" | "inauspicious";
 };
 
+export type PanchangReferenceView = {
+  /** "sunrise" (the almanac default) or "time" when a `time` arg was given. */
+  kind: "sunrise" | "time";
+  /** The instant every anga, sign and `fractionElapsed` below was evaluated at. */
+  instant: Date;
+};
+
 export type PanchangView = {
   date: string;
   timezone: string;
   location: { latitude: number; longitude: number; place: string | null };
   ayanamsaSystem: string;
   ayanamsa: number;
+  reference: PanchangReferenceView;
   sunrise: Date;
   sunset: Date;
   nextSunrise: Date;
@@ -58,10 +67,14 @@ export type PanchangView = {
   moonSign: LocalizedString;
   auspiciousPeriods: PanchangKaalaView[];
   inauspiciousPeriods: PanchangKaalaView[];
+  /** Auspicious/inauspicious windows that contain `reference.instant` — the
+   *  "what am I in right now" answer. Empty in sunrise mode. */
+  currentPeriods: PanchangKaalaView[];
 };
 
 export type PanchangArgs = {
   date?: string | null;
+  time?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   timezone?: string | null;
@@ -78,6 +91,12 @@ export function getPanchang(args: PanchangArgs): PanchangView {
   const longitude = args.longitude ?? env.PANCHANG_DEFAULT_LNG;
   const timezone = args.timezone ?? env.PANCHANG_DEFAULT_TZ;
   const monthSystem = args.monthSystem ?? "amanta";
+
+  let time: string | undefined;
+  if (args.time != null && args.time !== "") {
+    if (!WALL_TIME.test(args.time)) throw badInput("time must be HH:MM or HH:MM:SS (24-hour)");
+    time = args.time;
+  }
 
   // A human label only for the known default coordinates.
   const place =
@@ -99,13 +118,13 @@ export function getPanchang(args: PanchangArgs): PanchangView {
   }
 
   const dayKey = date.toISOString().slice(0, 10);
-  const key = `${dayKey}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
+  const key = `${dayKey}|${time ?? ""}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
   let result: Panchanga;
   try {
-    result = computePanchanga({ date, latitude, longitude, timezone, monthSystem });
+    result = computePanchanga({ date, time, latitude, longitude, timezone, monthSystem });
   } catch (err) {
     throw badInput(err instanceof Error ? err.message : "Could not compute panchang");
   }
@@ -138,6 +157,7 @@ function toView(p: Panchanga, place: string | null): PanchangView {
     location: { latitude: p.location.latitude, longitude: p.location.longitude, place },
     ayanamsaSystem: p.ayanamsaSystem,
     ayanamsa: p.ayanamsa,
+    reference: { kind: p.reference.kind, instant: p.reference.instant },
     sunrise: p.sunrise,
     sunset: p.sunset,
     nextSunrise: p.nextSunrise,
@@ -160,5 +180,6 @@ function toView(p: Panchanga, place: string | null): PanchangView {
     moonSign: localized(p.moonSign),
     auspiciousPeriods: p.auspiciousPeriods.map(toKaalaView),
     inauspiciousPeriods: p.inauspiciousPeriods.map(toKaalaView),
+    currentPeriods: p.currentPeriods.map(toKaalaView),
   };
 }

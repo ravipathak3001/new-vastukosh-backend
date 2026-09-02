@@ -269,6 +269,11 @@ type Panchang {
   ayanamsa: Float
   ayanamsaSystem: String
 
+  """
+  Auspicious/inauspicious windows containing `reference.instant`. Empty in sunrise mode; the "what's running now" answer when `time` is given.
+  """
+  currentPeriods: [PanchangKaala!]
+
   """Resolved civil date, yyyy-mm-dd in `timezone`."""
   date: String
   inauspiciousPeriods: [PanchangKaala!]
@@ -289,6 +294,11 @@ type Panchang {
   """End of the vara."""
   nextSunrise: DateTime
   paksha: LocalizedString
+
+  """
+  Which instant the aṅgas below reflect — the day's sunrise unless a `time` arg was given.
+  """
+  reference: PanchangReference
 
   """Season."""
   ritu: LocalizedString
@@ -348,6 +358,18 @@ type PanchangLocation {
 enum PanchangMonthSystem {
   amanta
   purnimanta
+}
+
+"""
+The instant the aṅgas, sidereal signs and `fractionElapsed` figures were evaluated at.
+"""
+type PanchangReference {
+  instant: DateTime
+
+  """
+  "sunrise" (the almanac default) or "time" when a `time` arg was supplied.
+  """
+  kind: String
 }
 
 enum PaymentMethod {
@@ -481,6 +503,11 @@ type Query {
 
     """Drives `masa`. Default amanta."""
     monthSystem: PanchangMonthSystem
+
+    """
+    Wall-clock time of day as HH:MM or HH:MM:SS (24-hour), read in `timezone`. When set, the aṅgas, sidereal signs and `fractionElapsed` are measured at that instant instead of at sunrise, and `currentPeriods` is populated. Use for a birth time or a "right now" lookup.
+    """
+    time: String
 
     """IANA timezone id. Default Asia/Kolkata."""
     timezone: String
