@@ -18,6 +18,7 @@ import {
 import { PromoModel } from "../modules/cart/cart.model.js";
 import { ConsultationServiceModel } from "../modules/consultation/consultation.model.js";
 import { SiteSettingsModel } from "../modules/seo/site-settings.model.js";
+import { AnnouncementModel } from "../modules/seo/announcement.model.js";
 import { UserModel } from "../modules/auth/auth.model.js";
 import { productSeeds } from "./seeds/products.js";
 import { rashiSeeds } from "./seeds/rashis.js";
@@ -85,6 +86,17 @@ async function main() {
   await SiteSettingsModel.updateOne(
     { key: "default" },
     { $set: siteSettingsSeed },
+    { upsert: true },
+  );
+  await AnnouncementModel.updateOne(
+    { key: "default" },
+    {
+      $setOnInsert: {
+        enabled: true,
+        text: { en: "Trusted by 10,000+ seekers", hi: "10,000+ साधकों का विश्वास" },
+        linkHref: "",
+      },
+    },
     { upsert: true },
   );
 

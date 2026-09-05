@@ -25,6 +25,115 @@ input AddressInput {
   state: String!
 }
 
+input AdminBookingFilter {
+  dateFrom: String
+  dateTo: String
+  search: String
+  serviceKey: ConsultationServiceKey
+  status: BookingStatus
+}
+
+type AdminBookingPage {
+  items: [ConsultationBooking!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+input AdminContactFilterInput {
+  search: String
+  status: ContactStatus
+}
+
+type AdminContactPage {
+  items: [ContactSubmission!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+type AdminDashboardStats {
+  bookingsPending: Int
+  contactSubmissionsNew: Int
+  newsletterCount: Int
+  ordersByStatus: [OrderStatusCount!]
+  ordersTotal: Int
+  revenue30d: Float
+  revenueTotal: Float
+}
+
+input AdminOrderFilter {
+  dateFrom: String
+  dateTo: String
+  search: String
+  status: OrderStatus
+}
+
+type AdminOrderPage {
+  items: [Order!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+enum AdminOrderSort {
+  newest
+  oldest
+  total_asc
+  total_desc
+}
+
+input AdminProductFilterInput {
+  category: ProductCategory
+  search: String
+  status: ProductStatus
+}
+
+type AdminProductPage {
+  items: [Product!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+input AdminSubscriberFilterInput {
+  search: String
+  status: SubscriberStatus
+}
+
+type AdminSubscriberPage {
+  items: [NewsletterSubscriber!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+input AdminUserFilterInput {
+  role: Role
+  search: String
+}
+
+type AdminUserPage {
+  items: [User!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+type Announcement {
+  enabled: Boolean
+  linkHref: String
+  linkLabel: LocalizedString
+  text: LocalizedString
+}
+
+input AnnouncementInput {
+  enabled: Boolean
+  linkHref: String
+  linkLabel: JSON
+  text: JSON
+}
+
 """
 Returned by signup/login/refreshToken. Web clients also receive the refresh token in an httpOnly cookie; native clients must persist `refreshToken` themselves.
 """
@@ -54,6 +163,13 @@ input BookConsultationInput {
   slot: String!
 }
 
+enum BookingStatus {
+  cancelled
+  completed
+  confirmed
+  requested
+}
+
 type Cart {
   id: ID
   itemCount: Int
@@ -80,11 +196,44 @@ type CartTotals {
 
 type Collection {
   description: LocalizedString
+  filter: CollectionFilter
   heroImage: String
+  order: Int
   products: [Product!]
+  published: Boolean
   seo: ResolvedSeo
+  seoRaw: SeoMetaRaw
   slug: String
   title: LocalizedString
+}
+
+type CollectionFilter {
+  category: ProductCategory
+  need: ProductNeed
+  rashi: String
+}
+
+input CollectionFilterInput {
+  category: ProductCategory
+  need: ProductNeed
+  rashi: String
+}
+
+input CollectionInput {
+  description: JSON
+  filter: CollectionFilterInput
+  heroImage: String
+  order: Int
+  published: Boolean
+  seo: SeoMetaInput
+  slug: String!
+  title: JSON
+}
+
+type ConsultationBirthDetails {
+  date: String
+  place: String
+  time: String
 }
 
 input ConsultationBirthDetailsInput {
@@ -94,21 +243,39 @@ input ConsultationBirthDetailsInput {
 }
 
 type ConsultationBooking {
+  birthDetails: ConsultationBirthDetails
+  createdAt: DateTime
   date: String
   email: String
   id: ID
   name: String
+  notes: String
+  phone: String
   serviceKey: ConsultationServiceKey
   slot: String
   status: String
+  userId: ID
 }
 
 type ConsultationService {
+  active: Boolean
   durationMins: Int
   icon: String
   key: ConsultationServiceKey
   meta: LocalizedString
   name: LocalizedString
+  order: Int
+  price: Float
+}
+
+input ConsultationServiceInput {
+  active: Boolean
+  durationMins: Int
+  icon: String
+  key: ConsultationServiceKey!
+  meta: JSON
+  name: JSON
+  order: Int
   price: Float
 }
 
@@ -126,6 +293,24 @@ input ContactInput {
   subject: String
 }
 
+enum ContactStatus {
+  new
+  read
+  responded
+}
+
+type ContactSubmission {
+  createdAt: DateTime
+  email: String
+  id: ID
+  locale: String
+  message: String
+  name: String
+  phone: String
+  status: ContactStatus
+  subject: String
+}
+
 """
 A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `date-time` format outlined in section 5.6 of the RFC 3339 profile of the ISO 8601 standard for representation of dates and times using the Gregorian calendar.
 """
@@ -134,8 +319,18 @@ scalar DateTime
 type Faq {
   answer: LocalizedString
   id: ID
+  key: String
   order: Int
+  published: Boolean
   question: LocalizedString
+}
+
+input FaqInput {
+  answer: JSON
+  key: String!
+  order: Int
+  published: Boolean
+  question: JSON
 }
 
 """
@@ -147,13 +342,27 @@ type LegalDoc {
   effectiveDate: DateTime
   sections: [LegalSection!]
   seo: ResolvedSeo
+  seoRaw: SeoMetaRaw
   slug: String
   title: LocalizedString
+}
+
+input LegalDocInput {
+  effectiveDate: DateTime
+  sections: [LegalSectionInput!]
+  seo: SeoMetaInput
+  slug: String!
+  title: JSON
 }
 
 type LegalSection {
   body: LocalizedString
   heading: LocalizedString
+}
+
+input LegalSectionInput {
+  body: JSON!
+  heading: JSON!
 }
 
 type LocalizedString {
@@ -181,27 +390,59 @@ type Mutation {
   bookConsultation(input: BookConsultationInput!): ConsultationBooking
   cancelOrder(anonId: String, orderNo: String!): Order
   clearPromo(anonId: String): Cart
+  deleteCollection(slug: String!): Boolean
+  deleteFaq(id: ID!): Boolean
+  deleteLegalDoc(slug: String!): Boolean
+  deletePromo(code: String!): Boolean
+  deleteRedirect(from: String!): Boolean
+  deleteTestimonial(id: ID!): Boolean
   login(input: LoginInput!): AuthPayload
   logout(everywhere: Boolean, refreshToken: String): Boolean
   placeOrder(input: PlaceOrderInput!): PlaceOrderResult
   refreshToken(refreshToken: String): AuthPayload
+  refundOrder(note: String, orderNo: String!): Order
   removeAddress(addressId: ID!): User
   removeFromCart(anonId: String, productSlug: String!): Cart
+  restoreProduct(slug: String!): Product
   setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
   setCartItemQty(anonId: String, productSlug: String!, qty: Int!): Cart
+  setUserRoles(roles: [Role!]!, userId: ID!): User
   signup(input: SignupInput!): AuthPayload
   submitContactForm(input: ContactInput!): MutationOk
   subscribeNewsletter(email: String!, source: String): MutationOk
   updateAddress(addressId: ID!, input: AddressInput!): User
+  updateAnnouncementBar(input: AnnouncementInput!): Announcement
+  updateBookingStatus(id: ID!, status: BookingStatus!): ConsultationBooking
+  updateContactStatus(id: ID!, status: ContactStatus!): ContactSubmission
   updateProfile(localePref: String, name: String, phone: String): User
+  updateSiteSettings(input: SiteSettingsInput!): SiteSettings
+  updateSubscriberStatus(email: String!, status: SubscriberStatus!): NewsletterSubscriber
+  upsertCollection(input: CollectionInput!): Collection
+  upsertConsultationService(input: ConsultationServiceInput!): ConsultationService
+  upsertFaq(input: FaqInput!): Faq
+  upsertLegalDoc(input: LegalDocInput!): LegalDoc
+  upsertPage(input: PageInput!): Page
   upsertProduct(input: ProductInput!): Product
+  upsertPromo(input: PromoInput!): Promo
+  upsertRedirect(input: RedirectInput!): Redirect
+  upsertTestimonial(input: TestimonialInput!): Testimonial
 }
 
 type MutationOk {
   ok: Boolean
 }
 
+type NewsletterSubscriber {
+  createdAt: DateTime
+  email: String
+  id: ID
+  locale: String
+  source: String
+  status: SubscriberStatus
+}
+
 type Order {
+  allowedTransitions: [OrderStatus!]
   createdAt: DateTime
   currency: String
   discount: Float
@@ -217,6 +458,8 @@ type Order {
   subtotal: Float
   timeline: [OrderTimelineEntry!]
   total: Float
+  updatedAt: DateTime
+  userId: ID
 }
 
 type OrderItem {
@@ -246,6 +489,11 @@ enum OrderStatus {
   refunded
 }
 
+type OrderStatusCount {
+  count: Int
+  status: String
+}
+
 type OrderTimelineEntry {
   at: DateTime
   note: String
@@ -257,6 +505,23 @@ type Page {
   key: String
   path: String
   seo: ResolvedSeo
+  seoRaw: SeoMetaRaw
+}
+
+input PageInput {
+  blocks: JSON
+  key: PageKey!
+  path: String
+  seo: SeoMetaInput
+}
+
+enum PageKey {
+  about
+  consultancy
+  contact
+  home
+  shop
+  testimonials
 }
 
 """
@@ -410,7 +675,9 @@ type Product {
   relatedProducts(limit: Int): [Product!]
   reviewsCount: Int
   seo: ResolvedSeo
+  seoRaw: SeoMetaRaw
   slug: String
+  status: ProductStatus
   tagline: LocalizedString
 }
 
@@ -438,16 +705,21 @@ input ProductFilterInput {
 input ProductInput {
   category: ProductCategory
   description: JSON
+  details: [JSON!]
   featured: Boolean
   gallery: [String!]
+  highlights: [JSON!]
   image: String
   mrp: Float
   name: JSON
   needs: [ProductNeed!]
   price: Float
   rashis: [String!]
+  rating: Float
+  reviewsCount: Int
   seo: SeoMetaInput
   slug: String!
+  status: ProductStatus
   tagline: JSON
 }
 
@@ -473,7 +745,56 @@ enum ProductSort {
   recommended
 }
 
+enum ProductStatus {
+  active
+  archived
+  draft
+}
+
+type Promo {
+  active: Boolean
+  amount: Float
+  code: String
+  expiresAt: DateTime
+  id: ID
+  kind: PromoKind
+  minSubtotal: Float
+}
+
+input PromoInput {
+  active: Boolean
+  amount: Float!
+  code: String!
+  expiresAt: DateTime
+  kind: PromoKind!
+  minSubtotal: Float
+}
+
+enum PromoKind {
+  flat
+  percent
+}
+
 type Query {
+  adminBooking(id: ID!): ConsultationBooking
+  adminBookings(filter: AdminBookingFilter, page: Int, pageSize: Int): AdminBookingPage
+  adminCollections: [Collection!]
+  adminConsultationServices: [ConsultationService!]
+  adminContactSubmissions(filter: AdminContactFilterInput, page: Int, pageSize: Int): AdminContactPage
+  adminDashboard: AdminDashboardStats
+  adminFaqs: [Faq!]
+  adminLegalDocs: [LegalDoc!]
+  adminNewsletterSubscribers(filter: AdminSubscriberFilterInput, page: Int, pageSize: Int): AdminSubscriberPage
+  adminOrder(orderNo: String!): Order
+  adminOrders(filter: AdminOrderFilter, page: Int, pageSize: Int, sort: AdminOrderSort): AdminOrderPage
+  adminPages: [Page!]
+  adminProduct(slug: String!): Product
+  adminProducts(filter: AdminProductFilterInput, page: Int, pageSize: Int): AdminProductPage
+  adminPromos: [Promo!]
+  adminTestimonials: [Testimonial!]
+  adminUser(id: ID!): User
+  adminUsers(filter: AdminUserFilterInput, page: Int, pageSize: Int): AdminUserPage
+  announcementBar: Announcement
   availableSlots(date: String!): [String!]
   cart(anonId: String): Cart
   collection(slug: String!): Collection
@@ -539,6 +860,12 @@ type Redirect {
   to: String
 }
 
+input RedirectInput {
+  from: String!
+  statusCode: Int
+  to: String!
+}
+
 """SEO metadata with all fallbacks applied — safe to render directly."""
 type ResolvedSeo {
   canonicalPath: String
@@ -550,11 +877,25 @@ type ResolvedSeo {
   title: LocalizedString
 }
 
+enum Role {
+  admin
+  customer
+}
+
 input SeoMetaInput {
   canonicalPath: String
   keywords: [String!]
   metaDescription: LocalizedStringInput
   metaTitle: LocalizedStringInput
+  noindex: Boolean
+  ogImage: String
+}
+
+type SeoMetaRaw {
+  canonicalPath: String
+  keywords: [String!]
+  metaDescription: LocalizedString
+  metaTitle: LocalizedString
   noindex: Boolean
   ogImage: String
 }
@@ -591,6 +932,18 @@ type SiteSettings {
   socials: [SocialLink!]
 }
 
+input SiteSettingsInput {
+  addressText: String
+  domain: String
+  email: String
+  legalName: String
+  logoUrl: String
+  name: String
+  phone: String
+  sameAs: [String!]
+  socials: [SocialLinkInput!]
+}
+
 type SitemapAlternate {
   href: String
   hreflang: String
@@ -611,20 +964,46 @@ type SocialLink {
   label: String
 }
 
+input SocialLinkInput {
+  href: String!
+  icon: String
+  label: String!
+}
+
+enum SubscriberStatus {
+  subscribed
+  unsubscribed
+}
+
 type Testimonial {
   featured: Boolean
   id: ID
   image: String
+  key: String
   meta: LocalizedString
   name: String
+  order: Int
   quote: LocalizedString
   rating: Int
+  wide: Boolean
+}
+
+input TestimonialInput {
+  featured: Boolean
+  image: String!
+  key: String!
+  meta: JSON
+  name: String!
+  order: Int
+  quote: JSON
+  rating: Int!
   wide: Boolean
 }
 
 type User {
   addresses: [Address!]
   birthDetails: BirthDetails
+  bookingCount: Int
   createdAt: DateTime
   email: String
   emailVerified: Boolean
@@ -632,7 +1011,9 @@ type User {
   karmaPoints: Int
   localePref: String
   name: String
+  orderCount: Int
   phone: String
   referralCode: String
   roles: [String!]
+  totalSpent: Float
 }

@@ -1,7 +1,13 @@
-import { badInput } from "../../shared/errors.js";
+import type { FilterQuery } from "mongoose";
+import { badInput, notFound } from "../../shared/errors.js";
+import { searchRegex } from "../../graphql/admin-common.js";
 import {
   ConsultationBookingModel,
   ConsultationServiceModel,
+  type BookingStatus,
+  type ConsultationBooking,
+  type ConsultationBookingDoc,
+  type ConsultationServiceDoc,
   type ConsultationServiceKey,
 } from "./consultation.model.js";
 
@@ -75,4 +81,74 @@ export async function bookConsultation(
     notes: input.notes?.trim() ?? "",
     userId: userId ?? null,
   });
+}
+
+// ─── Admin: bookings ──────────────────────────────────────────────────────
+
+export type AdminBookingFilter = {
+  status?: BookingStatus | null;
+  serviceKey?: ConsultationServiceKey | null;
+  search?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+
+export async function listBookingsForAdmin(
+  filter: AdminBookingFilter,
+  skip: number,
+  limit: number,
+): Promise<{ items: ConsultationBookingDoc[]; total: number }> {
+  const q: FilterQuery<ConsultationBooking> = {};
+  if (filter.status) q.status = filter.status;
+  if (filter.serviceKey) q.serviceKey = filter.serviceKey;
+  if (filter.search?.trim()) {
+    const rx = searchRegex(filter.search);
+    q.$or = [{ name: rx }, { email: rx }];
+  }
+  if (filter.dateFrom || filter.dateTo) {
+    const range: Record<string, string> = {};
+    if (filter.dateFrom) range.$gte = filter.dateFrom;
+    if (filter.dateTo) range.$lte = filter.dateTo;
+    q.date = range as never;
+  }
+  const [items, total] = await Promise.all([
+    ConsultationBookingModel.find(q).sort({ date: -1, slot: -1 }).skip(skip).limit(limit),
+    ConsultationBookingModel.countDocuments(q),
+  ]);
+  return { items, total };
+}
+
+export async function getBookingForAdmin(id: string): Promise<ConsultationBookingDoc> {
+  const doc = await ConsultationBookingModel.findById(id);
+  if (!doc) throw notFound("Booking");
+  return doc;
+}
+
+export async function updateBookingStatus(
+  id: string,
+  status: BookingStatus,
+): Promise<ConsultationBookingDoc> {
+  const doc = await ConsultationBookingModel.findByIdAndUpdate(
+    id,
+    { $set: { status } },
+    { new: true },
+  );
+  if (!doc) throw notFound("Booking");
+  return doc;
+}
+
+// ─── Admin: consultation services ─────────────────────────────────────────
+
+export async function listServicesForAdmin(): Promise<ConsultationServiceDoc[]> {
+  return ConsultationServiceModel.find().sort({ order: 1 });
+}
+
+export async function upsertConsultationService(
+  input: { key: string } & Record<string, unknown>,
+): Promise<ConsultationServiceDoc> {
+  return ConsultationServiceModel.findOneAndUpdate(
+    { key: input.key },
+    { $set: input },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
 }

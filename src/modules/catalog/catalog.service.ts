@@ -1,5 +1,6 @@
 import type { FilterQuery } from "mongoose";
 import { notFound } from "../../shared/errors.js";
+import { searchRegex } from "../../graphql/admin-common.js";
 import { notifyFrontendRevalidate } from "../../shared/http/revalidate-client.js";
 import {
   ProductModel,
@@ -7,6 +8,7 @@ import {
   type ProductCategory,
   type ProductDoc,
   type ProductNeed,
+  type ProductStatus,
 } from "./product.model.js";
 import { RashiModel } from "./rashi.model.js";
 import { CollectionModel, type CollectionDoc } from "./collection.model.js";
@@ -112,12 +114,82 @@ export async function upsertProduct(
 }
 
 export async function archiveProduct(slug: string): Promise<ProductDoc> {
+  return setProductStatus(slug, "archived");
+}
+
+export async function setProductStatus(
+  slug: string,
+  status: ProductStatus,
+): Promise<ProductDoc> {
   const doc = await ProductModel.findOneAndUpdate(
     { slug },
-    { $set: { status: "archived" } },
+    { $set: { status } },
     { new: true },
   );
   if (!doc) throw notFound("Product");
   await notifyFrontendRevalidate(["catalog", `product:${slug}`]);
   return doc;
+}
+
+// ─── Admin reads (status-agnostic) ───────────────────────────────────────
+
+export type AdminProductFilter = {
+  status?: ProductStatus | null;
+  category?: ProductCategory | null;
+  search?: string | null;
+};
+
+function toAdminProductQuery(f: AdminProductFilter = {}): FilterQuery<Product> {
+  const q: FilterQuery<Product> = {};
+  if (f.status) q.status = f.status;
+  if (f.category) q.category = f.category;
+  if (f.search?.trim()) {
+    const rx = searchRegex(f.search);
+    q.$or = [{ slug: rx }, { "name.en": rx }, { "name.hi": rx }];
+  }
+  return q;
+}
+
+export async function listProductsForAdmin(
+  filter: AdminProductFilter,
+  skip: number,
+  limit: number,
+): Promise<{ items: ProductDoc[]; total: number }> {
+  const q = toAdminProductQuery(filter);
+  const [items, total] = await Promise.all([
+    ProductModel.find(q).sort({ updatedAt: -1 }).skip(skip).limit(limit),
+    ProductModel.countDocuments(q),
+  ]);
+  return { items, total };
+}
+
+export async function getProductForAdmin(slug: string): Promise<ProductDoc> {
+  const doc = await ProductModel.findOne({ slug });
+  if (!doc) throw notFound("Product");
+  return doc;
+}
+
+// ─── Admin: collections ─────────────────────────────────────────────────
+
+export async function listCollectionsForAdmin(): Promise<CollectionDoc[]> {
+  return CollectionModel.find().sort({ order: 1, slug: 1 });
+}
+
+export async function upsertCollection(
+  input: { slug: string } & Record<string, unknown>,
+): Promise<CollectionDoc> {
+  const doc = await CollectionModel.findOneAndUpdate(
+    { slug: input.slug },
+    { $set: input },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+  await notifyFrontendRevalidate(["catalog", "content"]);
+  return doc;
+}
+
+export async function deleteCollection(slug: string): Promise<{ slug: string }> {
+  const doc = await CollectionModel.findOneAndDelete({ slug });
+  if (!doc) throw notFound("Collection");
+  await notifyFrontendRevalidate(["catalog", "content"]);
+  return { slug };
 }

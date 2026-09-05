@@ -14,9 +14,10 @@ import {
   type TestimonialDoc,
 } from "./content.model.js";
 
-const TestimonialRef = builder.objectRef<TestimonialDoc>("Testimonial").implement({
+export const TestimonialRef = builder.objectRef<TestimonialDoc>("Testimonial").implement({
   fields: (t) => ({
     id: t.field({ type: "ID", resolve: (d) => String(d._id) }),
+    key: t.exposeString("key", { authScopes: { admin: true } }),
     name: t.exposeString("name"),
     meta: t.field({ type: LocalizedStringRef, resolve: (d) => d.meta }),
     rating: t.exposeInt("rating"),
@@ -24,19 +25,22 @@ const TestimonialRef = builder.objectRef<TestimonialDoc>("Testimonial").implemen
     image: t.exposeString("image"),
     wide: t.exposeBoolean("wide"),
     featured: t.exposeBoolean("featured"),
+    order: t.exposeInt("order", { authScopes: { admin: true } }),
   }),
 });
 
-const FaqRef = builder.objectRef<FaqDoc>("Faq").implement({
+export const FaqRef = builder.objectRef<FaqDoc>("Faq").implement({
   fields: (t) => ({
     id: t.field({ type: "ID", resolve: (d) => String(d._id) }),
+    key: t.exposeString("key", { authScopes: { admin: true } }),
     question: t.field({ type: LocalizedStringRef, resolve: (d) => d.question }),
     answer: t.field({ type: LocalizedStringRef, resolve: (d) => d.answer }),
     order: t.exposeInt("order"),
+    published: t.exposeBoolean("published", { authScopes: { admin: true } }),
   }),
 });
 
-const LegalSectionRef = builder
+export const LegalSectionRef = builder
   .objectRef<LegalDocDoc["sections"][number]>("LegalSection")
   .implement({
     fields: (t) => ({
@@ -45,7 +49,7 @@ const LegalSectionRef = builder
     }),
   });
 
-const LegalDocRef = builder.objectRef<LegalDocDoc>("LegalDoc").implement({
+export const LegalDocRef = builder.objectRef<LegalDocDoc>("LegalDoc").implement({
   fields: (t) => ({
     slug: t.exposeString("slug"),
     title: t.field({ type: LocalizedStringRef, resolve: (d) => d.title }),
@@ -66,7 +70,7 @@ const LegalDocRef = builder.objectRef<LegalDocDoc>("LegalDoc").implement({
   }),
 });
 
-const PageRef = builder.objectRef<PageDoc>("Page").implement({
+export const PageRef = builder.objectRef<PageDoc>("Page").implement({
   fields: (t) => ({
     key: t.exposeString("key"),
     path: t.exposeString("path"),

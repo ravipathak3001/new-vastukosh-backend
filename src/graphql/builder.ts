@@ -5,6 +5,7 @@ import DataloaderPlugin from "@pothos/plugin-dataloader";
 import SimpleObjectsPlugin from "@pothos/plugin-simple-objects";
 import ZodPlugin from "@pothos/plugin-zod";
 import { DateTimeResolver, JSONResolver } from "graphql-scalars";
+import { forbidden, unauthenticated } from "../shared/errors.js";
 import type { Context } from "./context.js";
 
 /**
@@ -35,6 +36,12 @@ export const builder = new SchemaBuilder<{
       loggedIn: ctx.user != null,
       admin: ctx.user?.roles.includes("admin") ?? false,
     }),
+    // Without this, a failed `authScopes` check surfaces as a plain `Error`
+    // with no `extensions.code` — `formatError` then masks it as a generic
+    // "Internal server error" (and logs it as an unhandled crash) instead of
+    // the client-safe 401/403 it actually is.
+    unauthorizedError: (_parent, context) =>
+      context.user ? forbidden("You don't have access to this") : unauthenticated(),
   },
   relay: {},
 });

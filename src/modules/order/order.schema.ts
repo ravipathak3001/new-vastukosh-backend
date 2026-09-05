@@ -11,6 +11,7 @@ import {
 } from "./order.model.js";
 import {
   advanceStatus,
+  allowedNextStatuses,
   cancelOrder,
   getOrder,
   listMyOrders,
@@ -18,7 +19,9 @@ import {
   type PlaceOrderInput,
 } from "./order.service.js";
 
-const OrderStatusEnum = builder.enumType("OrderStatus", { values: ORDER_STATUSES });
+export const OrderStatusEnum = builder.enumType("OrderStatus", {
+  values: ORDER_STATUSES,
+});
 const PaymentMethodEnum = builder.enumType("PaymentMethod", { values: PAYMENT_METHODS });
 
 const OrderItemRef = builder.objectRef<OrderDoc["items"][number]>("OrderItem").implement({
@@ -68,6 +71,23 @@ export const OrderRef = builder.objectRef<OrderDoc>("Order").implement({
     payment: t.field({ type: OrderPaymentRef, resolve: (o) => o.payment }),
     timeline: t.field({ type: [OrderTimelineRef], resolve: (o) => o.timeline }),
     createdAt: t.field({ type: "DateTime", resolve: (o) => (o as any).createdAt }),
+    updatedAt: t.field({
+      type: "DateTime",
+      authScopes: { admin: true },
+      resolve: (o) => (o as any).updatedAt,
+    }),
+    userId: t.field({
+      type: "ID",
+      nullable: true,
+      authScopes: { admin: true },
+      resolve: (o) => (o.userId ? String(o.userId) : null),
+    }),
+    /** Statuses this order may move to next (admin status stepper). */
+    allowedTransitions: t.field({
+      type: [OrderStatusEnum],
+      authScopes: { admin: true },
+      resolve: (o) => allowedNextStatuses(o.status) as never[],
+    }),
   }),
 });
 

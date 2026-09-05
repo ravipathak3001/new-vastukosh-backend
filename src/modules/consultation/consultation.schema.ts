@@ -1,6 +1,7 @@
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
 import {
+  BOOKING_STATUSES,
   CONSULTATION_SERVICE_KEYS,
   type ConsultationBookingDoc,
   type ConsultationServiceDoc,
@@ -11,11 +12,15 @@ import {
   listServices,
 } from "./consultation.service.js";
 
-const ServiceKeyEnum = builder.enumType("ConsultationServiceKey", {
+export const ServiceKeyEnum = builder.enumType("ConsultationServiceKey", {
   values: CONSULTATION_SERVICE_KEYS,
 });
 
-const ConsultationServiceRef = builder
+export const BookingStatusEnum = builder.enumType("BookingStatus", {
+  values: BOOKING_STATUSES,
+});
+
+export const ConsultationServiceRef = builder
   .objectRef<ConsultationServiceDoc>("ConsultationService")
   .implement({
     fields: (t) => ({
@@ -25,10 +30,24 @@ const ConsultationServiceRef = builder
       durationMins: t.exposeInt("durationMins"),
       price: t.exposeFloat("price"),
       icon: t.exposeString("icon"),
+      order: t.exposeInt("order", { authScopes: { admin: true } }),
+      active: t.exposeBoolean("active", { authScopes: { admin: true } }),
     }),
   });
 
-const ConsultationBookingRef = builder
+const ConsultationBirthDetailsRef = builder
+  .objectRef<NonNullable<ConsultationBookingDoc["birthDetails"]>>(
+    "ConsultationBirthDetails",
+  )
+  .implement({
+    fields: (t) => ({
+      date: t.exposeString("date", { nullable: true }),
+      time: t.exposeString("time", { nullable: true }),
+      place: t.exposeString("place", { nullable: true }),
+    }),
+  });
+
+export const ConsultationBookingRef = builder
   .objectRef<ConsultationBookingDoc>("ConsultationBooking")
   .implement({
     fields: (t) => ({
@@ -39,6 +58,25 @@ const ConsultationBookingRef = builder
       name: t.exposeString("name"),
       email: t.exposeString("email"),
       status: t.exposeString("status"),
+      phone: t.exposeString("phone", { authScopes: { admin: true } }),
+      notes: t.exposeString("notes", { authScopes: { admin: true } }),
+      createdAt: t.field({
+        type: "DateTime",
+        authScopes: { admin: true },
+        resolve: (b) => (b as any).createdAt,
+      }),
+      userId: t.field({
+        type: "ID",
+        nullable: true,
+        authScopes: { admin: true },
+        resolve: (b) => (b.userId ? String(b.userId) : null),
+      }),
+      birthDetails: t.field({
+        type: ConsultationBirthDetailsRef,
+        nullable: true,
+        authScopes: { admin: true },
+        resolve: (b) => b.birthDetails ?? null,
+      }),
     }),
   });
 

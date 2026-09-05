@@ -5,6 +5,7 @@ import { ResolvedSeoRef } from "../seo/seo.schema.js";
 import {
   PRODUCT_CATEGORIES,
   PRODUCT_NEEDS,
+  PRODUCT_STATUSES,
   type ProductDoc,
 } from "./product.model.js";
 import type { RashiDoc } from "./rashi.model.js";
@@ -25,8 +26,13 @@ import {
 import { ProductModel } from "./product.model.js";
 import { SeoMetaInput } from "../seo/seo.schema.js";
 
-const ProductCategory = builder.enumType("ProductCategory", { values: PRODUCT_CATEGORIES });
-const ProductNeed = builder.enumType("ProductNeed", { values: PRODUCT_NEEDS });
+export const ProductCategory = builder.enumType("ProductCategory", {
+  values: PRODUCT_CATEGORIES,
+});
+export const ProductNeed = builder.enumType("ProductNeed", { values: PRODUCT_NEEDS });
+export const ProductStatusEnum = builder.enumType("ProductStatus", {
+  values: PRODUCT_STATUSES,
+});
 const ProductSortEnum = builder.enumType("ProductSort", {
   values: ["recommended", "price_asc", "price_desc", "rating", "newest"] as const,
 });
@@ -54,6 +60,7 @@ ProductRef.implement({
     rating: t.exposeFloat("rating"),
     reviewsCount: t.exposeInt("reviewsCount"),
     category: t.field({ type: ProductCategory, resolve: (p) => p.category as never }),
+    status: t.field({ type: ProductStatusEnum, resolve: (p) => p.status as never }),
     rashis: t.exposeStringList("rashis"),
     needs: t.field({ type: [ProductNeed], resolve: (p) => p.needs as never[] }),
     image: t.exposeString("image"),
@@ -100,12 +107,14 @@ export const RashiRef = builder.objectRef<RashiDoc>("Rashi").implement({
   }),
 });
 
-const CollectionRef = builder.objectRef<CollectionDoc>("Collection").implement({
+export const CollectionRef = builder.objectRef<CollectionDoc>("Collection").implement({
   fields: (t) => ({
     slug: t.exposeString("slug"),
     title: t.field({ type: LocalizedStringRef, resolve: (c) => c.title }),
     description: t.field({ type: LocalizedStringRef, resolve: (c) => c.description }),
     heroImage: t.exposeString("heroImage", { nullable: true }),
+    order: t.exposeInt("order", { authScopes: { admin: true } }),
+    published: t.exposeBoolean("published", { authScopes: { admin: true } }),
     seo: t.field({
       type: ResolvedSeoRef,
       resolve: (c) =>
@@ -138,11 +147,18 @@ const ProductInput = builder.inputType("ProductInput", {
     price: t.float({ required: false }),
     mrp: t.float({ required: false }),
     category: t.field({ type: ProductCategory, required: false }),
+    status: t.field({ type: ProductStatusEnum, required: false }),
     rashis: t.stringList({ required: false }),
     needs: t.field({ type: [ProductNeed], required: false }),
     image: t.string({ required: false }),
     gallery: t.stringList({ required: false }),
     featured: t.boolean({ required: false }),
+    rating: t.float({ required: false }),
+    reviewsCount: t.int({ required: false }),
+    /** Each entry is a `{ en, hi }` object. */
+    highlights: t.field({ type: ["JSON"], required: false }),
+    /** Each entry is `{ title: { en, hi }, body: { en, hi } }`. */
+    details: t.field({ type: ["JSON"], required: false }),
     seo: t.field({ type: SeoMetaInput, required: false }),
   }),
 });

@@ -1,5 +1,7 @@
+import type { FilterQuery } from "mongoose";
 import { customAlphabet } from "nanoid";
 import { badInput, forbidden, notFound } from "../../shared/errors.js";
+import { searchRegex } from "../../graphql/admin-common.js";
 import { logger } from "../../config/logger.js";
 import {
   clearCart,
@@ -11,6 +13,7 @@ import { CartModel } from "../cart/cart.model.js";
 import { getPaymentProvider } from "../payment/payment.provider.js";
 import {
   OrderModel,
+  type Order,
   type OrderDoc,
   type OrderStatus,
   type PaymentMethod,
@@ -37,6 +40,11 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return TRANSITIONS[from].includes(to);
+}
+
+/** The statuses an order in `from` may move to next — drives the admin UI. */
+export function allowedNextStatuses(from: OrderStatus): OrderStatus[] {
+  return [...TRANSITIONS[from]];
 }
 
 export async function advanceStatus(
@@ -154,4 +162,54 @@ export async function getOrder(orderNo: string, userId?: string): Promise<OrderD
   if (!order) throw notFound("Order");
   if (userId && order.userId && String(order.userId) !== userId) throw forbidden();
   return order;
+}
+
+// ─── Admin ──────────────────────────────────────────────────────────────
+
+export type AdminOrderFilter = {
+  status?: OrderStatus | null;
+  search?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+
+export type AdminOrderSort = "newest" | "oldest" | "total_desc" | "total_asc";
+
+const ADMIN_ORDER_SORT: Record<AdminOrderSort, Record<string, 1 | -1>> = {
+  newest: { createdAt: -1 },
+  oldest: { createdAt: 1 },
+  total_desc: { total: -1 },
+  total_asc: { total: 1 },
+};
+
+export async function listOrdersForAdmin(
+  filter: AdminOrderFilter,
+  skip: number,
+  limit: number,
+  sort: AdminOrderSort = "newest",
+): Promise<{ items: OrderDoc[]; total: number }> {
+  const q: FilterQuery<Order> = {};
+  if (filter.status) q.status = filter.status;
+  if (filter.search?.trim()) {
+    const rx = searchRegex(filter.search);
+    q.$or = [{ orderNo: rx }, { email: rx }];
+  }
+  if (filter.dateFrom || filter.dateTo) {
+    const range: Record<string, Date> = {};
+    if (filter.dateFrom) range.$gte = new Date(filter.dateFrom);
+    if (filter.dateTo) range.$lte = new Date(`${filter.dateTo}T23:59:59.999Z`);
+    q.createdAt = range;
+  }
+  const [items, total] = await Promise.all([
+    OrderModel.find(q).sort(ADMIN_ORDER_SORT[sort]).skip(skip).limit(limit),
+    OrderModel.countDocuments(q),
+  ]);
+  return { items, total };
+}
+
+/** Move an order to `refunded` (valid from `paid` or `delivered`). */
+export async function refundOrder(orderNo: string, note = ""): Promise<OrderDoc> {
+  const order = await OrderModel.findOne({ orderNo });
+  if (!order) throw notFound("Order");
+  return advanceStatus(order, "refunded", note || "Refunded by admin");
 }

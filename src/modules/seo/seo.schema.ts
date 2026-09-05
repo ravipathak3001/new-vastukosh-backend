@@ -1,9 +1,10 @@
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
 import { env } from "../../config/env.js";
-import type { ResolvedSeo } from "./seo.model.js";
+import type { ResolvedSeo, SeoMeta } from "./seo.model.js";
 import { buildSitemapEntries, type SitemapEntry } from "./sitemap.service.js";
 import { SiteSettingsModel, RedirectModel } from "./site-settings.model.js";
+import { AnnouncementModel, type AnnouncementDoc } from "./announcement.model.js";
 import { resolveSeo } from "./seo.service.js";
 import { ProductModel } from "../catalog/product.model.js";
 import { LegalDocModel, PageModel } from "../content/content.model.js";
@@ -24,6 +25,31 @@ export const ResolvedSeoRef = builder.objectRef<ResolvedSeo>("ResolvedSeo").impl
       nullable: true,
       resolve: (s) => s.structuredData ?? null,
     }),
+  }),
+});
+
+/**
+ * The raw, unresolved override — as opposed to `ResolvedSeo`, which has every
+ * fallback already applied. Admin edit forms read this (never `seo`, which
+ * would make the current fallback look like an explicit override and freeze
+ * it in place on the next save).
+ */
+export const SeoMetaRawRef = builder.objectRef<SeoMeta>("SeoMetaRaw").implement({
+  fields: (t) => ({
+    metaTitle: t.field({
+      type: LocalizedStringRef,
+      nullable: true,
+      resolve: (s) => s.metaTitle ?? null,
+    }),
+    metaDescription: t.field({
+      type: LocalizedStringRef,
+      nullable: true,
+      resolve: (s) => s.metaDescription ?? null,
+    }),
+    ogImage: t.exposeString("ogImage", { nullable: true }),
+    canonicalPath: t.exposeString("canonicalPath", { nullable: true }),
+    noindex: t.exposeBoolean("noindex"),
+    keywords: t.exposeStringList("keywords"),
   }),
 });
 
@@ -77,7 +103,7 @@ const SocialLinkRef = builder
     }),
   });
 
-const SiteSettingsRef = builder.objectRef<SiteSettingsShape>("SiteSettings").implement({
+export const SiteSettingsRef = builder.objectRef<SiteSettingsShape>("SiteSettings").implement({
   fields: (t) => ({
     name: t.exposeString("name"),
     legalName: t.exposeString("legalName"),
@@ -93,13 +119,36 @@ const SiteSettingsRef = builder.objectRef<SiteSettingsShape>("SiteSettings").imp
 
 // ─── Redirect ────────────────────────────────────────────────────────────
 type RedirectShape = InstanceType<typeof RedirectModel>;
-const RedirectRef = builder.objectRef<RedirectShape>("Redirect").implement({
+export const RedirectRef = builder.objectRef<RedirectShape>("Redirect").implement({
   fields: (t) => ({
     from: t.exposeString("from"),
     to: t.exposeString("to"),
     statusCode: t.exposeInt("statusCode"),
   }),
 });
+
+// ─── Announcement bar ──────────────────────────────────────────────────────
+export const AnnouncementRef = builder
+  .objectRef<AnnouncementDoc>("Announcement")
+  .implement({
+    fields: (t) => ({
+      enabled: t.exposeBoolean("enabled"),
+      text: t.field({ type: LocalizedStringRef, resolve: (a) => a.text }),
+      linkHref: t.exposeString("linkHref", { nullable: true }),
+      linkLabel: t.field({
+        type: LocalizedStringRef,
+        nullable: true,
+        resolve: (a) => a.linkLabel ?? null,
+      }),
+    }),
+  });
+
+const DEFAULT_ANNOUNCEMENT = {
+  enabled: true,
+  text: { en: "Trusted by 10,000+ seekers", hi: "10,000+ साधकों का विश्वास" },
+  linkHref: "",
+  linkLabel: undefined,
+} as unknown as AnnouncementDoc;
 
 // ─── Queries ─────────────────────────────────────────────────────────────
 export function registerSeoModule() {
@@ -127,6 +176,12 @@ export function registerSeoModule() {
     redirects: t.field({
       type: [RedirectRef],
       resolve: () => RedirectModel.find().sort({ from: 1 }),
+    }),
+
+    announcementBar: t.field({
+      type: AnnouncementRef,
+      resolve: async () =>
+        (await AnnouncementModel.findOne({ key: "default" })) ?? DEFAULT_ANNOUNCEMENT,
     }),
 
     /**

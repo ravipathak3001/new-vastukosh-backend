@@ -1,6 +1,11 @@
 import { badInput, notFound } from "../../shared/errors.js";
 import { ProductModel } from "../catalog/product.model.js";
-import { CartModel, PromoModel, type CartDoc } from "./cart.model.js";
+import {
+  CartModel,
+  PromoModel,
+  type CartDoc,
+  type PromoDoc,
+} from "./cart.model.js";
 
 /**
  * Totals rules — the authoritative version of `frontend/data/cart.ts`. The
@@ -176,4 +181,27 @@ export async function clearCart(owner: CartOwner) {
   cart.promoCode = "";
   await cart.save();
   return toResolvedCart(cart);
+}
+
+// ─── Admin: promo codes ──────────────────────────────────────────────────
+
+export async function listPromosForAdmin(): Promise<PromoDoc[]> {
+  return PromoModel.find().sort({ createdAt: -1 });
+}
+
+export async function upsertPromo(
+  input: { code: string } & Record<string, unknown>,
+): Promise<PromoDoc> {
+  const code = input.code.toUpperCase();
+  return PromoModel.findOneAndUpdate(
+    { code },
+    { $set: { ...input, code } },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+}
+
+export async function deletePromo(code: string): Promise<{ code: string }> {
+  const doc = await PromoModel.findOneAndDelete({ code: code.toUpperCase() });
+  if (!doc) throw notFound("Promo code");
+  return { code };
 }
