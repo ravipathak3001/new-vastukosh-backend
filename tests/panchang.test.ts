@@ -18,9 +18,9 @@ const QUERY = `
       location { latitude longitude place }
       vara { index name { en hi } start end }
       tithi { index name { en } start end fractionElapsed }
-      nakshatra { index name { en } pada lord }
-      yoga { index name { en } }
-      karana { index name { en } }
+      nakshatra { index name { en } start end pada lord }
+      yoga { index name { en } start end }
+      karana { index name { en } start end }
       paksha { en hi }
       masaAmanta { en }
       masaPurnimanta { en }
@@ -134,5 +134,86 @@ describe("panchang query", () => {
   it("rejects a malformed date", async () => {
     const res = await gql(QUERY, { date: "08-04-2024", ...DELHI });
     expect(res.errors?.[0]?.extensions?.code).toBe("BAD_INPUT");
+  });
+});
+
+const TIMELINE_QUERY = `
+  query ($date: String, $lat: Float, $lng: Float) {
+    panchangTimeline(date: $date, latitude: $lat, longitude: $lng, timezone: "Asia/Kolkata") {
+      date
+      sunrise
+      sunset
+      nextSunrise
+      vara { en }
+      tithiSegments { index name { en } start end }
+      nakshatraSegments { index name { en } start end }
+      yogaSegments { index name { en } start end }
+      karanaSegments { index name { en } start end }
+      auspiciousPeriods { name { en } }
+      inauspiciousPeriods { name { en } }
+    }
+  }
+`;
+
+type Segment = { index: number; name: { en: string }; start: string; end: string };
+
+/**
+ * Every segment list must fully tile [sunrise, nextSunrise] with no gaps or
+ * overlaps. Each boundary is computed twice — once as the end of one segment,
+ * once as the start of the next, from different probe instants — so allow the
+ * astronomical solver's own convergence jitter (sub-second) rather than
+ * requiring bit-for-bit equality.
+ */
+function assertContiguousCoverage(segments: Segment[], nextSunrise: number) {
+  expect(segments.length).toBeGreaterThan(0);
+  for (let i = 1; i < segments.length; i++) {
+    const gap = Math.abs(
+      new Date(segments[i]!.start).getTime() - new Date(segments[i - 1]!.end).getTime(),
+    );
+    expect(gap).toBeLessThan(5000);
+  }
+  expect(new Date(segments[segments.length - 1]!.end).getTime()).toBeGreaterThanOrEqual(nextSunrise);
+}
+
+describe("panchangTimeline query", () => {
+  it("covers the full sunrise-to-next-sunrise day for every anga, contiguously", async () => {
+    const res = await gql(TIMELINE_QUERY, { date: "2024-04-08", ...DELHI });
+    expect(res.errors).toBeUndefined();
+    const p = res.data.panchangTimeline;
+    const nextSunrise = new Date(p.nextSunrise).getTime();
+
+    assertContiguousCoverage(p.tithiSegments, nextSunrise);
+    assertContiguousCoverage(p.nakshatraSegments, nextSunrise);
+    assertContiguousCoverage(p.yogaSegments, nextSunrise);
+    assertContiguousCoverage(p.karanaSegments, nextSunrise);
+
+    // karana is half a tithi, so it can never change less often than tithi does.
+    expect(p.karanaSegments.length).toBeGreaterThanOrEqual(p.tithiSegments.length);
+  });
+
+  it("the first segment of each anga matches `panchang`'s sunrise snapshot", async () => {
+    const [timelineRes, snapshotRes] = await Promise.all([
+      gql(TIMELINE_QUERY, { date: "2024-04-08", ...DELHI }),
+      gql(QUERY, { date: "2024-04-08", ...DELHI }),
+    ]);
+    const timeline = timelineRes.data.panchangTimeline;
+    const snapshot = snapshotRes.data.panchang;
+
+    for (const anga of ["tithi", "nakshatra", "yoga", "karana"] as const) {
+      const first = timeline[`${anga}Segments`][0];
+      expect(first.index).toBe(snapshot[anga].index);
+      expect(first.name.en).toBe(snapshot[anga].name.en);
+      expect(new Date(first.start).getTime()).toBe(new Date(snapshot[anga].start).getTime());
+      expect(new Date(first.end).getTime()).toBe(new Date(snapshot[anga].end).getTime());
+    }
+    expect(timeline.inauspiciousPeriods.map((k: { name: { en: string } }) => k.name.en)).toEqual(
+      snapshot.inauspiciousPeriods.map((k: { name: { en: string } }) => k.name.en),
+    );
+  });
+
+  it("falls back to the configured default location when no coords are given", async () => {
+    const res = await gql(TIMELINE_QUERY, { date: "2024-04-08" });
+    expect(res.errors).toBeUndefined();
+    expect(res.data.panchangTimeline.tithiSegments.length).toBeGreaterThan(0);
   });
 });

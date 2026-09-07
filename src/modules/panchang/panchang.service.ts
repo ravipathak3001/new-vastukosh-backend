@@ -1,4 +1,4 @@
-import { computePanchanga, type Panchanga } from "vedic-panchanga";
+import { computePanchanga, type Anga, type Panchanga } from "vedic-panchanga";
 import { env } from "../../config/env.js";
 import { badInput } from "../../shared/errors.js";
 import type { LocalizedString } from "../../shared/localized.js";
@@ -86,17 +86,17 @@ const localized = (n: NameLike): LocalizedString => ({ en: n.iast, hi: n.devanag
 
 const memo = new Map<string, { at: number; value: PanchangView }>();
 
-export function getPanchang(args: PanchangArgs): PanchangView {
+function isoDateOf(date: Date): string {
+  // Deliberately not timezone-aware — `date` is always the noon-UTC anchor
+  // built below, which lands on the same calendar day for tz offsets ±12h.
+  return date.toISOString().slice(0, 10);
+}
+
+function resolveLocation(args: PanchangArgs) {
   const latitude = args.latitude ?? env.PANCHANG_DEFAULT_LAT;
   const longitude = args.longitude ?? env.PANCHANG_DEFAULT_LNG;
   const timezone = args.timezone ?? env.PANCHANG_DEFAULT_TZ;
   const monthSystem = args.monthSystem ?? "amanta";
-
-  let time: string | undefined;
-  if (args.time != null && args.time !== "") {
-    if (!WALL_TIME.test(args.time)) throw badInput("time must be HH:MM or HH:MM:SS (24-hour)");
-    time = args.time;
-  }
 
   // A human label only for the known default coordinates.
   const place =
@@ -117,7 +117,19 @@ export function getPanchang(args: PanchangArgs): PanchangView {
     date = new Date();
   }
 
-  const dayKey = date.toISOString().slice(0, 10);
+  return { latitude, longitude, timezone, monthSystem, place, date };
+}
+
+export function getPanchang(args: PanchangArgs): PanchangView {
+  const { latitude, longitude, timezone, monthSystem, place, date } = resolveLocation(args);
+
+  let time: string | undefined;
+  if (args.time != null && args.time !== "") {
+    if (!WALL_TIME.test(args.time)) throw badInput("time must be HH:MM or HH:MM:SS (24-hour)");
+    time = args.time;
+  }
+
+  const dayKey = isoDateOf(date);
   const key = `${dayKey}|${time ?? ""}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
   const hit = memo.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
@@ -182,4 +194,131 @@ function toView(p: Panchanga, place: string | null): PanchangView {
     inauspiciousPeriods: p.inauspiciousPeriods.map(toKaalaView),
     currentPeriods: p.currentPeriods.map(toKaalaView),
   };
+}
+
+// ─── Full-day timeline ──────────────────────────────────────────────────────
+// The chart view (sunrise → next sunrise) needs every segment each anga
+// occupies across the day, not just the one active at sunrise. `computePanchanga`
+// only ever answers "what's active at this instant", so we walk forward from
+// the sunrise-anga's `end`, re-querying just past each boundary, until we've
+// covered the full span. Pure/sync/no I/O, so a handful of extra calls is cheap.
+
+export type PanchangSegmentView = {
+  index: number;
+  name: LocalizedString;
+  start: Date;
+  end: Date;
+};
+
+export type PanchangTimelineView = {
+  date: string;
+  timezone: string;
+  location: { latitude: number; longitude: number; place: string | null };
+  sunrise: Date;
+  sunset: Date;
+  nextSunrise: Date;
+  moonrise: Date | null;
+  moonset: Date | null;
+  vara: LocalizedString;
+  tithiSegments: PanchangSegmentView[];
+  nakshatraSegments: PanchangSegmentView[];
+  yogaSegments: PanchangSegmentView[];
+  karanaSegments: PanchangSegmentView[];
+  auspiciousPeriods: PanchangKaalaView[];
+  inauspiciousPeriods: PanchangKaalaView[];
+};
+
+const timelineMemo = new Map<string, { at: number; value: PanchangTimelineView }>();
+
+/** Max segments per anga in one day — tithi/nakshatra/yoga rarely exceed 2, karana rarely exceeds 4. */
+const MAX_SEGMENTS = 6;
+
+function toSegmentView(a: Anga): PanchangSegmentView {
+  return { index: a.index, name: localized(a.name), start: a.start, end: a.end };
+}
+
+/** yyyy-mm-dd and HH:mm:ss for `instant`, read in `timezone` — what `computePanchanga`'s `date`+`time` options expect. */
+function wallClockParts(instant: Date, timezone: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${get("hour")}:${get("minute")}:${get("second")}`,
+  };
+}
+
+function buildSegments(
+  first: Anga,
+  pick: (p: Panchanga) => Anga,
+  location: { latitude: number; longitude: number; timezone: string; monthSystem: "amanta" | "purnimanta" },
+  nextSunrise: Date,
+): PanchangSegmentView[] {
+  const segments: PanchangSegmentView[] = [toSegmentView(first)];
+
+  for (let i = 0; i < MAX_SEGMENTS; i++) {
+    const last = segments[segments.length - 1]!;
+    if (last.end.getTime() >= nextSunrise.getTime()) break;
+
+    // A minute past the boundary avoids landing exactly on it (ambiguous which
+    // side); every anga here runs for hours, so this never skips a segment.
+    const cursor = new Date(last.end.getTime() + 60_000);
+    const { date: cursorDate, time: cursorTime } = wallClockParts(cursor, location.timezone);
+    const next = computePanchanga({
+      date: new Date(`${cursorDate}T12:00:00Z`),
+      time: cursorTime,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      timezone: location.timezone,
+      monthSystem: location.monthSystem,
+    });
+    segments.push(toSegmentView(pick(next)));
+  }
+
+  return segments;
+}
+
+export function getPanchangTimeline(args: PanchangArgs): PanchangTimelineView {
+  const { latitude, longitude, timezone, monthSystem, place, date } = resolveLocation(args);
+
+  const dayKey = isoDateOf(date);
+  const key = `timeline|${dayKey}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
+  const hit = timelineMemo.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+
+  let base: Panchanga;
+  try {
+    base = computePanchanga({ date, latitude, longitude, timezone, monthSystem });
+  } catch (err) {
+    throw badInput(err instanceof Error ? err.message : "Could not compute panchang");
+  }
+
+  const loc = { latitude, longitude, timezone, monthSystem };
+  const view: PanchangTimelineView = {
+    date: base.date,
+    timezone: base.timezone,
+    location: { latitude: base.location.latitude, longitude: base.location.longitude, place },
+    sunrise: base.sunrise,
+    sunset: base.sunset,
+    nextSunrise: base.nextSunrise,
+    moonrise: base.moonrise,
+    moonset: base.moonset,
+    vara: localized(base.vara.name),
+    tithiSegments: buildSegments(base.tithi, (p) => p.tithi, loc, base.nextSunrise),
+    nakshatraSegments: buildSegments(base.nakshatra, (p) => p.nakshatra, loc, base.nextSunrise),
+    yogaSegments: buildSegments(base.yoga, (p) => p.yoga, loc, base.nextSunrise),
+    karanaSegments: buildSegments(base.karana, (p) => p.karana, loc, base.nextSunrise),
+    auspiciousPeriods: base.auspiciousPeriods.map(toKaalaView),
+    inauspiciousPeriods: base.inauspiciousPeriods.map(toKaalaView),
+  };
+  timelineMemo.set(key, { at: Date.now(), value: view });
+  return view;
 }

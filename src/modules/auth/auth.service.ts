@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { customAlphabet } from "nanoid";
-import { conflict, unauthenticated } from "../../shared/errors.js";
+import { badInput, conflict, unauthenticated } from "../../shared/errors.js";
 import { hashPassword, verifyPassword } from "../../shared/auth/password.js";
 import {
   generateRefreshToken,
@@ -11,11 +11,14 @@ import {
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import {
+  PasswordResetTokenModel,
   RefreshTokenModel,
   UserModel,
   type UserDoc,
 } from "./auth.model.js";
 import { CartModel } from "../cart/cart.model.js";
+import { computeUserPermissions } from "../roles/role.service.js";
+import { getEmailProvider } from "../email/email.provider.js";
 
 const referralSuffix = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 
@@ -36,6 +39,7 @@ async function issueTokens(
   const accessToken = signAccessToken({
     sub: String(user._id),
     roles: user.roles as ("customer" | "admin")[],
+    permissions: await computeUserPermissions(user),
   });
   const { token, tokenHash } = generateRefreshToken();
   const expiresAt = new Date(Date.now() + ttlToMs(env.REFRESH_TTL));
@@ -181,3 +185,56 @@ export function refreshCookieOptions() {
 }
 
 export const REFRESH_COOKIE = "vk_rt";
+
+function hashResetToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Always resolves (never reveals whether the email exists) — the caller
+ * returns `true` unconditionally so this can't be used to enumerate accounts.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const user = await UserModel.findOne({ email: email.toLowerCase().trim() });
+  if (!user) return;
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  await PasswordResetTokenModel.create({
+    userId: user._id,
+    tokenHash: hashResetToken(token),
+    expiresAt: new Date(Date.now() + ttlToMs(env.PASSWORD_RESET_TTL)),
+  });
+
+  const locale = user.localePref || "en";
+  const resetUrl = `${env.SITE_URL}/${locale}/reset-password?token=${token}`;
+  await getEmailProvider().send(
+    user.email,
+    "Reset your Vastukosh password",
+    `<p>Hi ${user.name},</p>` +
+      `<p>Click below to choose a new password. This link expires in ${env.PASSWORD_RESET_TTL}.</p>` +
+      `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
+      `<p>If you didn't request this, you can safely ignore this email.</p>`,
+  );
+}
+
+/** Consumes the token, sets the new password, and revokes every existing session. */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  if (newPassword.length < 8) throw badInput("Password must be at least 8 characters");
+
+  const record = await PasswordResetTokenModel.findOne({ tokenHash: hashResetToken(token) });
+  if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
+    throw badInput("This reset link is invalid or has expired");
+  }
+  const user = await UserModel.findById(record.userId);
+  if (!user) throw badInput("This reset link is invalid or has expired");
+
+  user.passwordHash = await hashPassword(newPassword);
+  await user.save();
+  record.usedAt = new Date();
+  await record.save();
+
+  await RefreshTokenModel.updateMany(
+    { userId: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+}

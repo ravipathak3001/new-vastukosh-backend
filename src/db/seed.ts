@@ -20,6 +20,7 @@ import { ConsultationServiceModel } from "../modules/consultation/consultation.m
 import { SiteSettingsModel } from "../modules/seo/site-settings.model.js";
 import { AnnouncementModel } from "../modules/seo/announcement.model.js";
 import { UserModel } from "../modules/auth/auth.model.js";
+import { ensureSuperAdminRole } from "../modules/roles/role.service.js";
 import { productSeeds } from "./seeds/products.js";
 import { rashiSeeds } from "./seeds/rashis.js";
 import {
@@ -99,6 +100,8 @@ async function main() {
     },
     { upsert: true },
   );
+
+  await ensureSuperAdminRole();
 
   // A dev admin so the admin-scoped mutations are reachable out of the box.
   const adminEmail = "admin@vastukosh.com";

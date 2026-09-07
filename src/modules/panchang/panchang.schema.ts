@@ -2,10 +2,13 @@ import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
 import {
   getPanchang,
+  getPanchangTimeline,
   type PanchangView,
   type PanchangAngaView,
   type PanchangKaalaView,
   type PanchangReferenceView,
+  type PanchangSegmentView,
+  type PanchangTimelineView,
 } from "./panchang.service.js";
 
 const MonthSystemEnum = builder.enumType("PanchangMonthSystem", {
@@ -114,6 +117,40 @@ const PanchangRef = builder.objectRef<PanchangView>("Panchang").implement({
   }),
 });
 
+const PanchangSegmentRef = builder.objectRef<PanchangSegmentView>("PanchangSegment").implement({
+  description: "One occupancy window of an anga within a day's timeline — the anga plus the span it holds.",
+  fields: (t) => ({
+    index: t.exposeInt("index", {
+      description: "1-based position in its cycle (tithi 1–30, nakshatra/yoga 1–27, karana 1–11).",
+    }),
+    name: t.field({ type: LocalizedStringRef, resolve: (s) => s.name }),
+    start: t.field({ type: "DateTime", resolve: (s) => s.start }),
+    end: t.field({ type: "DateTime", resolve: (s) => s.end }),
+  }),
+});
+
+const PanchangTimelineRef = builder.objectRef<PanchangTimelineView>("PanchangTimeline").implement({
+  description:
+    "The full sunrise-to-next-sunrise day, broken into every segment each anga occupies — the data a day-chart view needs, as opposed to `panchang`'s single sunrise/instant snapshot.",
+  fields: (t) => ({
+    date: t.exposeString("date"),
+    timezone: t.exposeString("timezone"),
+    location: t.field({ type: PanchangLocationRef, resolve: (p) => p.location }),
+    sunrise: t.field({ type: "DateTime", resolve: (p) => p.sunrise }),
+    sunset: t.field({ type: "DateTime", resolve: (p) => p.sunset }),
+    nextSunrise: t.field({ type: "DateTime", resolve: (p) => p.nextSunrise }),
+    moonrise: t.field({ type: "DateTime", nullable: true, resolve: (p) => p.moonrise }),
+    moonset: t.field({ type: "DateTime", nullable: true, resolve: (p) => p.moonset }),
+    vara: t.field({ type: LocalizedStringRef, resolve: (p) => p.vara }),
+    tithiSegments: t.field({ type: [PanchangSegmentRef], resolve: (p) => p.tithiSegments }),
+    nakshatraSegments: t.field({ type: [PanchangSegmentRef], resolve: (p) => p.nakshatraSegments }),
+    yogaSegments: t.field({ type: [PanchangSegmentRef], resolve: (p) => p.yogaSegments }),
+    karanaSegments: t.field({ type: [PanchangSegmentRef], resolve: (p) => p.karanaSegments }),
+    auspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.auspiciousPeriods }),
+    inauspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.inauspiciousPeriods }),
+  }),
+});
+
 export function registerPanchangModule() {
   builder.queryFields((t) => ({
     panchang: t.field({
@@ -139,6 +176,30 @@ export function registerPanchangModule() {
         getPanchang({
           date: args.date,
           time: args.time,
+          latitude: args.latitude,
+          longitude: args.longitude,
+          timezone: args.timezone,
+          monthSystem: args.monthSystem,
+        }),
+    }),
+
+    panchangTimeline: t.field({
+      type: PanchangTimelineRef,
+      description:
+        "The full sunrise-to-next-sunrise day for a location, broken into every segment each anga occupies — for a day-chart view. All args are optional; unset location falls back to the server's configured default (New Delhi).",
+      args: {
+        date: t.arg.string({
+          required: false,
+          description: "Civil date as yyyy-mm-dd. Defaults to today in `timezone`.",
+        }),
+        latitude: t.arg.float({ required: false, description: "North positive. Default from server config." }),
+        longitude: t.arg.float({ required: false, description: "East positive. Default from server config." }),
+        timezone: t.arg.string({ required: false, description: "IANA timezone id. Default Asia/Kolkata." }),
+        monthSystem: t.arg({ type: MonthSystemEnum, required: false, description: "Default amanta." }),
+      },
+      resolve: (_parent, args) =>
+        getPanchangTimeline({
+          date: args.date,
           latitude: args.latitude,
           longitude: args.longitude,
           timezone: args.timezone,

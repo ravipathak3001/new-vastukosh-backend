@@ -7,6 +7,14 @@ export type Role = "customer" | "admin";
 export type AccessTokenPayload = {
   sub: string;
   roles: Role[];
+  /**
+   * Flattened permission keys from the user's assigned custom roles (see
+   * `modules/roles`), computed once at issue time. Baked into the token
+   * rather than looked up per-request — same latency/propagation tradeoff
+   * the codebase already accepts for `roles`, so a permission change takes
+   * effect on the user's next token refresh (within `ACCESS_TTL`).
+   */
+  permissions: string[];
 };
 
 export function signAccessToken(payload: AccessTokenPayload): string {
@@ -19,9 +27,13 @@ export function verifyAccessToken(token: string): AccessTokenPayload | null {
   try {
     const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
     if (typeof decoded === "string") return null;
-    const { sub, roles } = decoded as jwt.JwtPayload;
+    const { sub, roles, permissions } = decoded as jwt.JwtPayload;
     if (typeof sub !== "string" || !Array.isArray(roles)) return null;
-    return { sub, roles: roles as Role[] };
+    return {
+      sub,
+      roles: roles as Role[],
+      permissions: Array.isArray(permissions) ? (permissions as string[]) : [],
+    };
   } catch {
     return null;
   }

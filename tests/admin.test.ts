@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { signAccessToken } from "../src/shared/auth/jwt.js";
+import { ALL_PERMISSION_KEYS } from "../src/modules/roles/permission-catalog.js";
 import { ProductModel } from "../src/modules/catalog/product.model.js";
 import { OrderModel } from "../src/modules/order/order.model.js";
 import { ConsultationBookingModel } from "../src/modules/consultation/consultation.model.js";
@@ -17,12 +18,19 @@ beforeAll(startTestDb);
 afterAll(stopTestDb);
 beforeEach(resetDb);
 
-// Scope enforcement reads `ctx.user.roles` off the access token — no DB user
-// record is needed to exercise it.
-const adminToken = signAccessToken({ sub: "000000000000000000000001", roles: ["admin"] });
+// Scope enforcement reads `ctx.user.roles`/`ctx.user.permissions` off the access
+// token — no DB user record is needed to exercise it. Full permissions here
+// mirrors what a real admin with no custom role assigned gets automatically
+// (see `computeUserPermissions`'s no-lockout fallback).
+const adminToken = signAccessToken({
+  sub: "000000000000000000000001",
+  roles: ["admin"],
+  permissions: ALL_PERMISSION_KEYS,
+});
 const customerToken = signAccessToken({
   sub: "000000000000000000000002",
   roles: ["customer"],
+  permissions: [],
 });
 const asAdmin = { authorization: `Bearer ${adminToken}` };
 const asCustomer = { authorization: `Bearer ${customerToken}` };
@@ -313,7 +321,11 @@ describe("users admin", () => {
       roles: ["admin", "customer"],
       referralCode: "SEEKER-TEST02",
     });
-    const token = signAccessToken({ sub: String(admin._id), roles: ["admin"] });
+    const token = signAccessToken({
+      sub: String(admin._id),
+      roles: ["admin"],
+      permissions: ALL_PERMISSION_KEYS,
+    });
 
     const res = await gql(
       `mutation ($id: ID!) { setUserRoles(userId: $id, roles: [customer]) { id } }`,

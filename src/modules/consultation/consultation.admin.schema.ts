@@ -53,7 +53,7 @@ export function registerConsultationAdminModule() {
   builder.queryFields((t) => ({
     adminBookings: t.field({
       type: AdminBookingPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "bookings.view" },
       args: {
         filter: t.arg({ type: AdminBookingFilter, required: false }),
         page: t.arg.int({ required: false }),
@@ -79,14 +79,14 @@ export function registerConsultationAdminModule() {
     adminBooking: t.field({
       type: ConsultationBookingRef,
       nullable: true,
-      authScopes: { admin: true },
+      authScopes: { permission: "bookings.view" },
       args: { id: t.arg.id({ required: true }) },
       resolve: (_p, { id }) => getBookingForAdmin(String(id)).catch(() => null),
     }),
 
     adminConsultationServices: t.field({
       type: [ConsultationServiceRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "bookings.view" },
       resolve: () => listServicesForAdmin(),
     }),
   }));
@@ -94,7 +94,7 @@ export function registerConsultationAdminModule() {
   builder.mutationFields((t) => ({
     updateBookingStatus: t.field({
       type: ConsultationBookingRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "bookings.manage" },
       args: {
         id: t.arg.id({ required: true }),
         status: t.arg({ type: BookingStatusEnum, required: true }),
@@ -104,7 +104,7 @@ export function registerConsultationAdminModule() {
 
     upsertConsultationService: t.field({
       type: ConsultationServiceRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "bookings.manage" },
       args: { input: t.arg({ type: ConsultationServiceInput, required: true }) },
       resolve: (_p, { input }) => upsertConsultationService(input as never),
     }),

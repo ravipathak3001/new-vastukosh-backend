@@ -17,7 +17,7 @@ import {
 export const TestimonialRef = builder.objectRef<TestimonialDoc>("Testimonial").implement({
   fields: (t) => ({
     id: t.field({ type: "ID", resolve: (d) => String(d._id) }),
-    key: t.exposeString("key", { authScopes: { admin: true } }),
+    key: t.exposeString("key", { authScopes: { permission: "content.view" } }),
     name: t.exposeString("name"),
     meta: t.field({ type: LocalizedStringRef, resolve: (d) => d.meta }),
     rating: t.exposeInt("rating"),
@@ -25,18 +25,18 @@ export const TestimonialRef = builder.objectRef<TestimonialDoc>("Testimonial").i
     image: t.exposeString("image"),
     wide: t.exposeBoolean("wide"),
     featured: t.exposeBoolean("featured"),
-    order: t.exposeInt("order", { authScopes: { admin: true } }),
+    order: t.exposeInt("order", { authScopes: { permission: "content.view" } }),
   }),
 });
 
 export const FaqRef = builder.objectRef<FaqDoc>("Faq").implement({
   fields: (t) => ({
     id: t.field({ type: "ID", resolve: (d) => String(d._id) }),
-    key: t.exposeString("key", { authScopes: { admin: true } }),
+    key: t.exposeString("key", { authScopes: { permission: "content.view" } }),
     question: t.field({ type: LocalizedStringRef, resolve: (d) => d.question }),
     answer: t.field({ type: LocalizedStringRef, resolve: (d) => d.answer }),
     order: t.exposeInt("order"),
-    published: t.exposeBoolean("published", { authScopes: { admin: true } }),
+    published: t.exposeBoolean("published", { authScopes: { permission: "content.view" } }),
   }),
 });
 

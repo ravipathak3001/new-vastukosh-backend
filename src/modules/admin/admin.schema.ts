@@ -17,19 +17,19 @@ const RoleEnum = builder.enumType("Role", { values: ROLES });
 // (the list screen doesn't; the detail screen does).
 builder.objectField(UserRef, "orderCount", (t) =>
   t.int({
-    authScopes: { admin: true },
+    authScopes: { permission: "users.view" },
     resolve: async (u) => (await getUserStats(String(u._id))).orderCount,
   }),
 );
 builder.objectField(UserRef, "totalSpent", (t) =>
   t.float({
-    authScopes: { admin: true },
+    authScopes: { permission: "users.view" },
     resolve: async (u) => (await getUserStats(String(u._id))).totalSpent,
   }),
 );
 builder.objectField(UserRef, "bookingCount", (t) =>
   t.int({
-    authScopes: { admin: true },
+    authScopes: { permission: "users.view" },
     resolve: async (u) => (await getUserStats(String(u._id))).bookingCount,
   }),
 );
@@ -80,7 +80,7 @@ export function registerAdminModule() {
   builder.queryFields((t) => ({
     adminUsers: t.field({
       type: AdminUserPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "users.view" },
       args: {
         filter: t.arg({ type: AdminUserFilterInput, required: false }),
         page: t.arg.int({ required: false }),
@@ -100,14 +100,14 @@ export function registerAdminModule() {
     adminUser: t.field({
       type: UserRef,
       nullable: true,
-      authScopes: { admin: true },
+      authScopes: { permission: "users.view" },
       args: { id: t.arg.id({ required: true }) },
       resolve: (_p, { id }) => getUserForAdmin(String(id)).catch(() => null),
     }),
 
     adminDashboard: t.field({
       type: AdminDashboardStatsRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "dashboard.view" },
       resolve: () => getDashboardStats(),
     }),
   }));
@@ -115,7 +115,7 @@ export function registerAdminModule() {
   builder.mutationFields((t) => ({
     setUserRoles: t.field({
       type: UserRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "users.manage" },
       args: {
         userId: t.arg.id({ required: true }),
         roles: t.arg({ type: [RoleEnum], required: true }),

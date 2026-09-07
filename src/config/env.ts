@@ -42,6 +42,20 @@ const schema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
+  SHIPPING_PROVIDER: z.enum(["mock", "shiprocket"]).default("mock"),
+  SHIPROCKET_EMAIL: z.string().optional(),
+  SHIPROCKET_PASSWORD: z.string().optional(),
+  SHIPROCKET_PICKUP_LOCATION: z.string().optional(),
+  SHIPROCKET_WEBHOOK_TOKEN: z.string().optional(),
+
+  EMAIL_PROVIDER: z.enum(["mock", "smtp"]).default("mock"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default("Vastukosh <no-reply@vastukosh.com>"),
+  PASSWORD_RESET_TTL: z.string().default("1h"),
+
   SITE_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_REVALIDATE_URL: z.string().url().optional(),
   REVALIDATE_SECRET: z.string().optional(),

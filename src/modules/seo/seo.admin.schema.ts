@@ -48,7 +48,7 @@ export function registerSeoAdminModule() {
   builder.mutationFields((t) => ({
     updateSiteSettings: t.field({
       type: SiteSettingsRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "settings.manage" },
       args: { input: t.arg({ type: SiteSettingsInput, required: true }) },
       resolve: async (_p, { input }) => {
         const doc = await SiteSettingsModel.findOneAndUpdate(
@@ -63,7 +63,7 @@ export function registerSeoAdminModule() {
 
     upsertRedirect: t.field({
       type: RedirectRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "settings.manage" },
       args: { input: t.arg({ type: RedirectInput, required: true }) },
       resolve: (_p, { input }) =>
         RedirectModel.findOneAndUpdate(
@@ -75,7 +75,7 @@ export function registerSeoAdminModule() {
 
     deleteRedirect: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "settings.manage" },
       args: { from: t.arg.string({ required: true }) },
       resolve: async (_p, { from }) => {
         const doc = await RedirectModel.findOneAndDelete({ from });
@@ -86,7 +86,7 @@ export function registerSeoAdminModule() {
 
     updateAnnouncementBar: t.field({
       type: AnnouncementRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "settings.manage" },
       args: { input: t.arg({ type: AnnouncementInput, required: true }) },
       resolve: async (_p, { input }) => {
         const doc = await AnnouncementModel.findOneAndUpdate(

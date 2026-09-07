@@ -85,7 +85,7 @@ export function registerMarketingAdminModule() {
   builder.queryFields((t) => ({
     adminContactSubmissions: t.field({
       type: AdminContactPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "marketing.view" },
       args: {
         filter: t.arg({ type: AdminContactFilterInput, required: false }),
         page: t.arg.int({ required: false }),
@@ -104,7 +104,7 @@ export function registerMarketingAdminModule() {
 
     adminNewsletterSubscribers: t.field({
       type: AdminSubscriberPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "marketing.view" },
       args: {
         filter: t.arg({ type: AdminSubscriberFilterInput, required: false }),
         page: t.arg.int({ required: false }),
@@ -125,7 +125,7 @@ export function registerMarketingAdminModule() {
   builder.mutationFields((t) => ({
     updateContactStatus: t.field({
       type: ContactSubmissionRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "marketing.manage" },
       args: {
         id: t.arg.id({ required: true }),
         status: t.arg({ type: ContactStatusEnum, required: true }),
@@ -135,7 +135,7 @@ export function registerMarketingAdminModule() {
 
     updateSubscriberStatus: t.field({
       type: NewsletterSubscriberRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "marketing.manage" },
       args: {
         email: t.arg.string({ required: true }),
         status: t.arg({ type: SubscriberStatusEnum, required: true }),

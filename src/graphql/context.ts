@@ -5,7 +5,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from "../shared/localized.js";
 import { ProductModel, type ProductDoc } from "../modules/catalog/product.model.js";
 import { RashiModel, type RashiDoc } from "../modules/catalog/rashi.model.js";
 
-export type AuthUser = { id: string; roles: Role[] };
+export type AuthUser = { id: string; roles: Role[]; permissions: string[] };
 
 export type Loaders = {
   productBySlug: DataLoader<string, ProductDoc | null>;
@@ -61,7 +61,7 @@ export function buildContext({
   return {
     req,
     res,
-    user: payload ? { id: payload.sub, roles: payload.roles } : null,
+    user: payload ? { id: payload.sub, roles: payload.roles, permissions: payload.permissions } : null,
     locale: requestLocale(req),
     loaders: createLoaders(),
   };

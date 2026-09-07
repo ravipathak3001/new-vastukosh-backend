@@ -78,7 +78,7 @@ builder.objectField(CollectionRef, "filter", (t) =>
   t.field({
     type: CollectionFilterRef,
     nullable: true,
-    authScopes: { admin: true },
+    authScopes: { permission: "catalog.view" },
     resolve: (c) => (c as { filter?: CollectionFilterShape }).filter ?? null,
   }),
 );
@@ -88,7 +88,7 @@ builder.objectField(ProductRef, "seoRaw", (t) =>
   t.field({
     type: SeoMetaRawRef,
     nullable: true,
-    authScopes: { admin: true },
+    authScopes: { permission: "catalog.view" },
     resolve: (p) => (p as { seo?: SeoMeta }).seo ?? null,
   }),
 );
@@ -96,7 +96,7 @@ builder.objectField(CollectionRef, "seoRaw", (t) =>
   t.field({
     type: SeoMetaRawRef,
     nullable: true,
-    authScopes: { admin: true },
+    authScopes: { permission: "catalog.view" },
     resolve: (c) => (c as { seo?: SeoMeta }).seo ?? null,
   }),
 );
@@ -118,7 +118,7 @@ export function registerCatalogAdminModule() {
   builder.queryFields((t) => ({
     adminProducts: t.field({
       type: AdminProductPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.view" },
       args: {
         filter: t.arg({ type: AdminProductFilterInput, required: false }),
         page: t.arg.int({ required: false }),
@@ -139,14 +139,14 @@ export function registerCatalogAdminModule() {
     adminProduct: t.field({
       type: ProductRef,
       nullable: true,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.view" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => getProductForAdmin(slug).catch(() => null),
     }),
 
     adminCollections: t.field({
       type: [CollectionRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.view" },
       resolve: () => listCollectionsForAdmin(),
     }),
   }));
@@ -154,21 +154,21 @@ export function registerCatalogAdminModule() {
   builder.mutationFields((t) => ({
     restoreProduct: t.field({
       type: ProductRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => setProductStatus(slug, "active"),
     }),
 
     upsertCollection: t.field({
       type: CollectionRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.manage" },
       args: { input: t.arg({ type: CollectionInput, required: true }) },
       resolve: (_p, { input }) => upsertCollection(input as never),
     }),
 
     deleteCollection: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: async (_p, { slug }) => {
         await deleteCollection(slug);

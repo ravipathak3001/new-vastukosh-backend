@@ -20,6 +20,35 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const PAYMENT_STATUSES = ["created", "authorized", "captured", "failed"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+/** Raw carrier status strings recorded verbatim; not an enum since providers vary. */
+const shipmentStatusHistoryEntrySchema = new Schema(
+  {
+    status: { type: String, required: true },
+    at: { type: Date, required: true, default: () => new Date() },
+  },
+  { _id: false },
+);
+
+const orderShipmentSchema = new Schema(
+  {
+    provider: { type: String, required: true },
+    providerOrderId: { type: String, default: "" },
+    shipmentId: { type: String, default: "" },
+    awbCode: { type: String, default: "" },
+    courierId: { type: String, default: "" },
+    courierName: { type: String, default: "" },
+    trackingUrl: { type: String, default: "" },
+    labelUrl: { type: String, default: "" },
+    invoiceUrl: { type: String, default: "" },
+    pickupScheduledDate: { type: Date, default: null },
+    expectedDeliveryDate: { type: Date, default: null },
+    rawStatus: { type: String, default: "" },
+    statusHistory: { type: [shipmentStatusHistoryEntrySchema], default: [] },
+    cancelledAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const orderItemSchema = new Schema(
   {
     productSlug: { type: String, required: true },
@@ -67,6 +96,9 @@ const orderSchema = new Schema(
     status: { type: String, enum: ORDER_STATUSES, default: "pending_payment", index: true },
     payment: { type: orderPaymentSchema, required: true },
     timeline: { type: [timelineEntrySchema], default: [] },
+    verifiedAt: { type: Date, default: null },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    shipment: { type: orderShipmentSchema, default: null },
   },
   { timestamps: true },
 );

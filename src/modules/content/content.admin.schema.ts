@@ -30,7 +30,7 @@ builder.objectField(PageRef, "seoRaw", (t) =>
   t.field({
     type: SeoMetaRawRef,
     nullable: true,
-    authScopes: { admin: true },
+    authScopes: { permission: "content.view" },
     resolve: (p) => (p as { seo?: SeoMeta }).seo ?? null,
   }),
 );
@@ -38,7 +38,7 @@ builder.objectField(LegalDocRef, "seoRaw", (t) =>
   t.field({
     type: SeoMetaRawRef,
     nullable: true,
-    authScopes: { admin: true },
+    authScopes: { permission: "content.view" },
     resolve: (d) => (d as { seo?: SeoMeta }).seo ?? null,
   }),
 );
@@ -97,22 +97,22 @@ export function registerContentAdminModule() {
   builder.queryFields((t) => ({
     adminTestimonials: t.field({
       type: [TestimonialRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "content.view" },
       resolve: () => listTestimonialsForAdmin(),
     }),
     adminFaqs: t.field({
       type: [FaqRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "content.view" },
       resolve: () => listFaqsForAdmin(),
     }),
     adminLegalDocs: t.field({
       type: [LegalDocRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "content.view" },
       resolve: () => listLegalDocsForAdmin(),
     }),
     adminPages: t.field({
       type: [PageRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "content.view" },
       resolve: () => listPagesForAdmin(),
     }),
   }));
@@ -120,13 +120,13 @@ export function registerContentAdminModule() {
   builder.mutationFields((t) => ({
     upsertTestimonial: t.field({
       type: TestimonialRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { input: t.arg({ type: TestimonialInput, required: true }) },
       resolve: (_p, { input }) => upsertTestimonial(input as never),
     }),
     deleteTestimonial: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { id: t.arg.id({ required: true }) },
       resolve: async (_p, { id }) => {
         await deleteTestimonial(String(id));
@@ -136,13 +136,13 @@ export function registerContentAdminModule() {
 
     upsertFaq: t.field({
       type: FaqRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { input: t.arg({ type: FaqInput, required: true }) },
       resolve: (_p, { input }) => upsertFaq(input as never),
     }),
     deleteFaq: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { id: t.arg.id({ required: true }) },
       resolve: async (_p, { id }) => {
         await deleteFaq(String(id));
@@ -152,13 +152,13 @@ export function registerContentAdminModule() {
 
     upsertLegalDoc: t.field({
       type: LegalDocRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { input: t.arg({ type: LegalDocInput, required: true }) },
       resolve: (_p, { input }) => upsertLegalDoc(input as never),
     }),
     deleteLegalDoc: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: async (_p, { slug }) => {
         await deleteLegalDoc(slug);
@@ -168,7 +168,7 @@ export function registerContentAdminModule() {
 
     upsertPage: t.field({
       type: PageRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "content.manage" },
       args: { input: t.arg({ type: PageInput, required: true }) },
       resolve: (_p, { input }) => upsertPage(input as never),
     }),

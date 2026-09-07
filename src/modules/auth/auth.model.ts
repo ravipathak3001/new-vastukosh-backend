@@ -44,6 +44,13 @@ const userSchema = new Schema(
     name: { type: String, required: true, trim: true },
     phone: { type: String, trim: true, default: "" },
     roles: { type: [String], enum: ROLES, default: ["customer"] },
+    /**
+     * Custom admin-panel roles (see `modules/roles`). Empty means "no custom
+     * role configured yet" — `computeUserPermissions` treats that as full
+     * access for anyone in `roles: ["admin"]` so nobody is locked out before
+     * the owner deliberately assigns scoped roles.
+     */
+    roleIds: { type: [Schema.Types.ObjectId], ref: "Role", default: [] },
     localePref: { type: String, enum: ["en", "hi"], default: "en" },
     birthDetails: { type: birthDetailsSchema, required: false },
     addresses: { type: [addressSchema], default: [] },
@@ -82,3 +89,26 @@ refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export type RefreshToken = InferSchemaType<typeof refreshTokenSchema>;
 export type RefreshTokenDoc = HydratedDocument<RefreshToken>;
 export const RefreshTokenModel = defineModel("RefreshToken", refreshTokenSchema);
+
+/**
+ * One-time, short-lived tokens for the "forgot password" flow. Stored hashed,
+ * same as refresh tokens — the raw token only ever exists in the reset email
+ * and the client's URL.
+ */
+const passwordResetTokenSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    tokenHash: { type: String, required: true, unique: true, index: true },
+    expiresAt: { type: Date, required: true },
+    usedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+passwordResetTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+export type PasswordResetToken = InferSchemaType<typeof passwordResetTokenSchema>;
+export type PasswordResetTokenDoc = HydratedDocument<PasswordResetToken>;
+export const PasswordResetTokenModel = defineModel(
+  "PasswordResetToken",
+  passwordResetTokenSchema,
+);

@@ -1,6 +1,6 @@
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
-import { unauthenticated } from "../../shared/errors.js";
+import { badInput, unauthenticated } from "../../shared/errors.js";
 import type { Context } from "../../graphql/context.js";
 import { AddressRef } from "../user/user.schema.js";
 import {
@@ -73,20 +73,24 @@ export const OrderRef = builder.objectRef<OrderDoc>("Order").implement({
     createdAt: t.field({ type: "DateTime", resolve: (o) => (o as any).createdAt }),
     updatedAt: t.field({
       type: "DateTime",
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.view" },
       resolve: (o) => (o as any).updatedAt,
     }),
     userId: t.field({
       type: "ID",
       nullable: true,
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.view" },
       resolve: (o) => (o.userId ? String(o.userId) : null),
     }),
-    /** Statuses this order may move to next (admin status stepper). */
+    /**
+     * Statuses this order may move to next via the generic admin stepper.
+     * `in_transit` is excluded — that transition only happens through
+     * `startDelivery`, which actually creates the Shiprocket shipment.
+     */
     allowedTransitions: t.field({
       type: [OrderStatusEnum],
-      authScopes: { admin: true },
-      resolve: (o) => allowedNextStatuses(o.status) as never[],
+      authScopes: { permission: "orders.view" },
+      resolve: (o) => allowedNextStatuses(o.status).filter((s) => s !== "in_transit") as never[],
     }),
   }),
 });
@@ -181,13 +185,16 @@ export function registerOrderModule() {
 
     advanceOrderStatus: t.field({
       type: OrderRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.manage" },
       args: {
         orderNo: t.arg.string({ required: true }),
         status: t.arg({ type: OrderStatusEnum, required: true }),
         note: t.arg.string({ required: false }),
       },
       resolve: async (_p, { orderNo, status, note }) => {
+        if (status === "in_transit") {
+          throw badInput("Use startDelivery to move an order to in_transit");
+        }
         const order = await OrderModel.findOne({ orderNo });
         if (!order) throw unauthenticated("Order not found");
         return advanceStatus(order, status as never, note ?? "");

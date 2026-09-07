@@ -32,7 +32,7 @@ const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   paid: ["consecration", "cancelled", "refunded"],
   consecration: ["packed", "cancelled"],
   packed: ["in_transit", "cancelled"],
-  in_transit: ["delivered"],
+  in_transit: ["delivered", "cancelled"],
   delivered: ["refunded"],
   cancelled: [],
   refunded: [],
@@ -171,6 +171,8 @@ export type AdminOrderFilter = {
   search?: string | null;
   dateFrom?: string | null;
   dateTo?: string | null;
+  /** true = verified only, false = awaiting verification, null/undefined = either. */
+  verified?: boolean | null;
 };
 
 export type AdminOrderSort = "newest" | "oldest" | "total_desc" | "total_asc";
@@ -199,6 +201,9 @@ export async function listOrdersForAdmin(
     if (filter.dateFrom) range.$gte = new Date(filter.dateFrom);
     if (filter.dateTo) range.$lte = new Date(`${filter.dateTo}T23:59:59.999Z`);
     q.createdAt = range;
+  }
+  if (filter.verified != null) {
+    q.verifiedAt = filter.verified ? { $ne: null } : null;
   }
   const [items, total] = await Promise.all([
     OrderModel.find(q).sort(ADMIN_ORDER_SORT[sort]).skip(skip).limit(limit),

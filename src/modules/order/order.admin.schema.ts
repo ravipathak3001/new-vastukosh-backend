@@ -18,6 +18,7 @@ const AdminOrderFilter = builder.inputType("AdminOrderFilter", {
     search: t.string({ required: false }),
     dateFrom: t.string({ required: false }),
     dateTo: t.string({ required: false }),
+    verified: t.boolean({ required: false }),
   }),
 });
 
@@ -36,7 +37,7 @@ export function registerOrderAdminModule() {
   builder.queryFields((t) => ({
     adminOrders: t.field({
       type: AdminOrderPage,
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.view" },
       args: {
         filter: t.arg({ type: AdminOrderFilter, required: false }),
         sort: t.arg({ type: AdminOrderSortEnum, required: false }),
@@ -51,6 +52,7 @@ export function registerOrderAdminModule() {
             search: args.filter?.search ?? null,
             dateFrom: args.filter?.dateFrom ?? null,
             dateTo: args.filter?.dateTo ?? null,
+            verified: args.filter?.verified ?? null,
           },
           skip,
           limit,
@@ -63,7 +65,7 @@ export function registerOrderAdminModule() {
     adminOrder: t.field({
       type: OrderRef,
       nullable: true,
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.view" },
       args: { orderNo: t.arg.string({ required: true }) },
       resolve: (_p, { orderNo }) => OrderModel.findOne({ orderNo }),
     }),
@@ -73,7 +75,7 @@ export function registerOrderAdminModule() {
     // Status moves reuse the existing admin `advanceOrderStatus` mutation.
     refundOrder: t.field({
       type: OrderRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "orders.manage" },
       args: {
         orderNo: t.arg.string({ required: true }),
         note: t.arg.string({ required: false }),

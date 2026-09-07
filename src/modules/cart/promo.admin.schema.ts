@@ -41,7 +41,7 @@ export function registerPromoAdminModule() {
   builder.queryFields((t) => ({
     adminPromos: t.field({
       type: [PromoRef],
-      authScopes: { admin: true },
+      authScopes: { permission: "promos.view" },
       resolve: () => listPromosForAdmin(),
     }),
   }));
@@ -49,14 +49,14 @@ export function registerPromoAdminModule() {
   builder.mutationFields((t) => ({
     upsertPromo: t.field({
       type: PromoRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "promos.manage" },
       args: { input: t.arg({ type: PromoInput, required: true }) },
       resolve: (_p, { input }) => upsertPromo(input as never),
     }),
 
     deletePromo: t.field({
       type: "Boolean",
-      authScopes: { admin: true },
+      authScopes: { permission: "promos.manage" },
       args: { code: t.arg.string({ required: true }) },
       resolve: async (_p, { code }) => {
         await deletePromo(code);

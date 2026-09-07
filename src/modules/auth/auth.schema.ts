@@ -10,6 +10,8 @@ import {
   login,
   logout,
   refreshCookieOptions,
+  requestPasswordReset,
+  resetPassword,
   rotateRefreshToken,
   signup,
 } from "./auth.service.js";
@@ -137,6 +139,26 @@ export function registerAuthModule() {
           args.refreshToken ?? (ctx.req.cookies?.[REFRESH_COOKIE] as string | undefined);
         await logout(presented, args.everywhere ?? false);
         ctx.res.clearCookie(REFRESH_COOKIE, { path: "/" });
+        return true;
+      },
+    }),
+
+    /** Always returns true, whether or not the email is registered — avoids leaking account existence. */
+    requestPasswordReset: t.boolean({
+      args: { email: t.arg.string({ required: true }) },
+      resolve: async (_p, { email }) => {
+        await requestPasswordReset(email);
+        return true;
+      },
+    }),
+
+    resetPassword: t.boolean({
+      args: {
+        token: t.arg.string({ required: true }),
+        newPassword: t.arg.string({ required: true }),
+      },
+      resolve: async (_p, { token, newPassword }) => {
+        await resetPassword(token, newPassword);
         return true;
       },
     }),

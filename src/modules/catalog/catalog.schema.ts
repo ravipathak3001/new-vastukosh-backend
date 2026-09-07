@@ -113,8 +113,8 @@ export const CollectionRef = builder.objectRef<CollectionDoc>("Collection").impl
     title: t.field({ type: LocalizedStringRef, resolve: (c) => c.title }),
     description: t.field({ type: LocalizedStringRef, resolve: (c) => c.description }),
     heroImage: t.exposeString("heroImage", { nullable: true }),
-    order: t.exposeInt("order", { authScopes: { admin: true } }),
-    published: t.exposeBoolean("published", { authScopes: { admin: true } }),
+    order: t.exposeInt("order", { authScopes: { permission: "catalog.view" } }),
+    published: t.exposeBoolean("published", { authScopes: { permission: "catalog.view" } }),
     seo: t.field({
       type: ResolvedSeoRef,
       resolve: (c) =>
@@ -225,13 +225,13 @@ export function registerCatalogModule() {
   builder.mutationFields((t) => ({
     upsertProduct: t.field({
       type: ProductRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.manage" },
       args: { input: t.arg({ type: ProductInput, required: true }) },
       resolve: (_p, { input }) => upsertProduct(input as never),
     }),
     archiveProduct: t.field({
       type: ProductRef,
-      authScopes: { admin: true },
+      authScopes: { permission: "catalog.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => archiveProduct(slug),
     }),

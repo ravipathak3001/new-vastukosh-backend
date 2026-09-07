@@ -67,6 +67,7 @@ input AdminOrderFilter {
   dateTo: String
   search: String
   status: OrderStatus
+  verified: Boolean
 }
 
 type AdminOrderPage {
@@ -94,6 +95,30 @@ type AdminProductPage {
   page: Int
   pageSize: Int
   total: Int
+}
+
+input AdminReturnFilter {
+  search: String
+  status: ReturnStatus
+}
+
+type AdminReturnPage {
+  items: [Return!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
+type AdminRole {
+  id: ID
+  isSystem: Boolean
+  name: String
+  permissions: [String!]
+}
+
+input AdminRoleInput {
+  name: String!
+  permissions: [String!]!
 }
 
 input AdminSubscriberFilterInput {
@@ -386,28 +411,43 @@ type Mutation {
   addToCart(anonId: String, productSlug: String!, qty: Int): Cart
   advanceOrderStatus(note: String, orderNo: String!, status: OrderStatus!): Order
   applyPromo(anonId: String, code: String!): Cart
+  approveReturn(note: String, returnNo: String!): Return
   archiveProduct(slug: String!): Product
+  assignUserRoles(roleIds: [ID!]!, userId: ID!): User
   bookConsultation(input: BookConsultationInput!): ConsultationBooking
   cancelOrder(anonId: String, orderNo: String!): Order
+  cancelReturn(returnNo: String!): Return
+  cancelShipment(note: String, orderNo: String!): Order
   clearPromo(anonId: String): Cart
+  createRole(input: AdminRoleInput!): AdminRole
   deleteCollection(slug: String!): Boolean
   deleteFaq(id: ID!): Boolean
   deleteLegalDoc(slug: String!): Boolean
   deletePromo(code: String!): Boolean
   deleteRedirect(from: String!): Boolean
+  deleteRole(id: ID!): Boolean
   deleteTestimonial(id: ID!): Boolean
   login(input: LoginInput!): AuthPayload
   logout(everywhere: Boolean, refreshToken: String): Boolean
+  markReturnReceived(note: String, returnNo: String!): Return
   placeOrder(input: PlaceOrderInput!): PlaceOrderResult
   refreshToken(refreshToken: String): AuthPayload
   refundOrder(note: String, orderNo: String!): Order
+  refundReturn(amount: Float!, returnNo: String!): Return
+  rejectReturn(note: String, returnNo: String!): Return
   removeAddress(addressId: ID!): User
   removeFromCart(anonId: String, productSlug: String!): Cart
+  requestPasswordReset(email: String!): Boolean
+  requestReturn(items: [ReturnItemInput!]!, orderNo: String!): Return
+  resetPassword(newPassword: String!, token: String!): Boolean
   restoreProduct(slug: String!): Product
+  schedulePickup(orderNo: String!): Order
+  scheduleReturnPickup(returnNo: String!): Return
   setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
   setCartItemQty(anonId: String, productSlug: String!, qty: Int!): Cart
   setUserRoles(roles: [Role!]!, userId: ID!): User
   signup(input: SignupInput!): AuthPayload
+  startDelivery(orderNo: String!): Order
   submitContactForm(input: ContactInput!): MutationOk
   subscribeNewsletter(email: String!, source: String): MutationOk
   updateAddress(addressId: ID!, input: AddressInput!): User
@@ -415,6 +455,8 @@ type Mutation {
   updateBookingStatus(id: ID!, status: BookingStatus!): ConsultationBooking
   updateContactStatus(id: ID!, status: ContactStatus!): ContactSubmission
   updateProfile(localePref: String, name: String, phone: String): User
+  updateRole(id: ID!, name: String, permissions: [String!]): AdminRole
+  updateShippingAutomationSettings(input: ShippingAutomationSettingsInput!): ShippingAutomationSettings
   updateSiteSettings(input: SiteSettingsInput!): SiteSettings
   updateSubscriberStatus(email: String!, status: SubscriberStatus!): NewsletterSubscriber
   upsertCollection(input: CollectionInput!): Collection
@@ -426,6 +468,7 @@ type Mutation {
   upsertPromo(input: PromoInput!): Promo
   upsertRedirect(input: RedirectInput!): Redirect
   upsertTestimonial(input: TestimonialInput!): Testimonial
+  verifyOrder(orderNo: String!): Order
 }
 
 type MutationOk {
@@ -452,6 +495,7 @@ type Order {
   orderNo: String
   payment: OrderPayment
   promoCode: String
+  shipment: OrderShipment
   shippingAddress: Address
   shippingFee: Float
   status: OrderStatus
@@ -460,6 +504,8 @@ type Order {
   total: Float
   updatedAt: DateTime
   userId: ID
+  verifiedAt: DateTime
+  verifiedBy: ID
 }
 
 type OrderItem {
@@ -476,6 +522,21 @@ type OrderPayment {
   provider: String
   providerRef: String
   status: String
+}
+
+type OrderShipment {
+  awbCode: String
+  cancelledAt: DateTime
+  courierName: String
+  expectedDeliveryDate: DateTime
+  invoiceUrl: String
+  labelUrl: String
+  pickupScheduledDate: DateTime
+  provider: String
+  rawStatus: String
+  shipmentId: String
+  statusHistory: [ShipmentStatusHistoryEntry!]
+  trackingUrl: String
 }
 
 enum OrderStatus {
@@ -637,11 +698,52 @@ type PanchangReference {
   kind: String
 }
 
+"""
+One occupancy window of an anga within a day's timeline — the anga plus the span it holds.
+"""
+type PanchangSegment {
+  end: DateTime
+
+  """
+  1-based position in its cycle (tithi 1–30, nakshatra/yoga 1–27, karana 1–11).
+  """
+  index: Int
+  name: LocalizedString
+  start: DateTime
+}
+
+"""
+The full sunrise-to-next-sunrise day, broken into every segment each anga occupies — the data a day-chart view needs, as opposed to `panchang`'s single sunrise/instant snapshot.
+"""
+type PanchangTimeline {
+  auspiciousPeriods: [PanchangKaala!]
+  date: String
+  inauspiciousPeriods: [PanchangKaala!]
+  karanaSegments: [PanchangSegment!]
+  location: PanchangLocation
+  moonrise: DateTime
+  moonset: DateTime
+  nakshatraSegments: [PanchangSegment!]
+  nextSunrise: DateTime
+  sunrise: DateTime
+  sunset: DateTime
+  timezone: String
+  tithiSegments: [PanchangSegment!]
+  vara: LocalizedString
+  yogaSegments: [PanchangSegment!]
+}
+
 enum PaymentMethod {
   card
   cod
   netbanking
   upi
+}
+
+type PermissionInfo {
+  category: String
+  key: String
+  label: String
 }
 
 input PlaceOrderInput {
@@ -791,6 +893,10 @@ type Query {
   adminProduct(slug: String!): Product
   adminProducts(filter: AdminProductFilterInput, page: Int, pageSize: Int): AdminProductPage
   adminPromos: [Promo!]
+  adminReturn(returnNo: String!): Return
+  adminReturns(filter: AdminReturnFilter, page: Int, pageSize: Int): AdminReturnPage
+  adminRoles: [AdminRole!]
+  adminShippingAutomationSettings: ShippingAutomationSettings
   adminTestimonials: [Testimonial!]
   adminUser(id: ID!): User
   adminUsers(filter: AdminUserFilterInput, page: Int, pageSize: Int): AdminUserPage
@@ -806,6 +912,8 @@ type Query {
   legalDocs: [LegalDoc!]
   me: User
   myOrders: [Order!]
+  myReturn(returnNo: String!): Return
+  myReturns: [Return!]
   order(orderNo: String!): Order
   page(key: String!): Page
 
@@ -833,12 +941,34 @@ type Query {
     """IANA timezone id. Default Asia/Kolkata."""
     timezone: String
   ): Panchang
+
+  """
+  The full sunrise-to-next-sunrise day for a location, broken into every segment each anga occupies — for a day-chart view. All args are optional; unset location falls back to the server's configured default (New Delhi).
+  """
+  panchangTimeline(
+    """Civil date as yyyy-mm-dd. Defaults to today in `timezone`."""
+    date: String
+
+    """North positive. Default from server config."""
+    latitude: Float
+
+    """East positive. Default from server config."""
+    longitude: Float
+
+    """Default amanta."""
+    monthSystem: PanchangMonthSystem
+
+    """IANA timezone id. Default Asia/Kolkata."""
+    timezone: String
+  ): PanchangTimeline
+  permissionCatalog: [PermissionInfo!]
   product(slug: String!): Product
   products(filter: ProductFilterInput, limit: Int, offset: Int, sort: ProductSort): ProductPage
   rashi(slug: String!): Rashi
   rashis: [Rashi!]
   redirects: [Redirect!]
   relatedProducts(limit: Int, slug: String!): [Product!]
+  returnEligibility(orderNo: String!): ReturnEligibility
   seoForPath(path: String!): ResolvedSeo
   siteSettings: SiteSettings
   sitemapEntries(baseUrl: String): [SitemapEntry!]
@@ -877,6 +1007,71 @@ type ResolvedSeo {
   title: LocalizedString
 }
 
+type Return {
+  adminNote: String
+  createdAt: DateTime
+  id: ID
+  items: [ReturnItem!]
+  orderNo: String
+  refundAmount: Float
+  returnNo: String
+  shipment: ReturnShipment
+  status: ReturnStatus
+  timeline: [ReturnTimelineEntry!]
+}
+
+type ReturnEligibility {
+  deadline: DateTime
+  eligible: Boolean
+  items: [ReturnEligibleItem!]
+  reason: String
+}
+
+type ReturnEligibleItem {
+  maxQty: Int
+  name: String
+  productSlug: String
+  qty: Int
+}
+
+type ReturnItem {
+  name: LocalizedString
+  productSlug: String
+  qty: Int
+  reason: String
+}
+
+input ReturnItemInput {
+  productSlug: String!
+  qty: Int!
+  reason: String!
+}
+
+type ReturnShipment {
+  awbCode: String
+  courierName: String
+  pickupScheduledDate: DateTime
+  provider: String
+  rawStatus: String
+  trackingUrl: String
+}
+
+enum ReturnStatus {
+  approved
+  cancelled
+  pickup_scheduled
+  received
+  refunded
+  rejected
+  requested
+}
+
+type ReturnTimelineEntry {
+  at: DateTime
+  note: String
+  status: ReturnStatus
+}
+
 enum Role {
   admin
   customer
@@ -900,6 +1095,11 @@ type SeoMetaRaw {
   ogImage: String
 }
 
+type ShipmentStatusHistoryEntry {
+  at: DateTime
+  status: String
+}
+
 input ShippingAddressInput {
   city: String!
   firstName: String!
@@ -909,6 +1109,19 @@ input ShippingAddressInput {
   phone: String
   pincode: String!
   state: String!
+}
+
+type ShippingAutomationSettings {
+  autoSchedulePickup: Boolean
+  lastPolledAt: DateTime
+  pollEnabled: Boolean
+  pollIntervalMinutes: Int
+}
+
+input ShippingAutomationSettingsInput {
+  autoSchedulePickup: Boolean
+  pollEnabled: Boolean
+  pollIntervalMinutes: Int
 }
 
 input SignupInput {
@@ -1005,6 +1218,7 @@ type User {
   birthDetails: BirthDetails
   bookingCount: Int
   createdAt: DateTime
+  customRoles: [AdminRole!]
   email: String
   emailVerified: Boolean
   id: ID

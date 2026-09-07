@@ -22,6 +22,7 @@ export const builder = new SchemaBuilder<{
   AuthScopes: {
     loggedIn: boolean;
     admin: boolean;
+    permission: string;
   };
 }>({
   plugins: [
@@ -35,6 +36,7 @@ export const builder = new SchemaBuilder<{
     authScopes: (ctx) => ({
       loggedIn: ctx.user != null,
       admin: ctx.user?.roles.includes("admin") ?? false,
+      permission: (perm: string) => ctx.user?.permissions.includes(perm) ?? false,
     }),
     // Without this, a failed `authScopes` check surfaces as a plain `Error`
     // with no `extensions.code` — `formatError` then masks it as a generic
