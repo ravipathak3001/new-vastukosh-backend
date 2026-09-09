@@ -70,7 +70,7 @@ export function registerSeoAdminModule() {
           { from: input.from },
           { $set: input },
           { new: true, upsert: true, setDefaultsOnInsert: true },
-        ),
+        ).exec(),
     }),
 
     deleteRedirect: t.field({

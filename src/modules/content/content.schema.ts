@@ -93,27 +93,29 @@ export function registerContentModule() {
       type: [TestimonialRef],
       args: { featuredOnly: t.arg.boolean({ required: false }) },
       resolve: (_p, args) =>
-        TestimonialModel.find(args.featuredOnly ? { featured: true } : {}).sort({ order: 1 }),
+        TestimonialModel.find(args.featuredOnly ? { featured: true } : {})
+          .sort({ order: 1 })
+          .exec(),
     }),
     faqs: t.field({
       type: [FaqRef],
-      resolve: () => FaqModel.find({ published: true }).sort({ order: 1 }),
+      resolve: () => FaqModel.find({ published: true }).sort({ order: 1 }).exec(),
     }),
     legalDocs: t.field({
       type: [LegalDocRef],
-      resolve: () => LegalDocModel.find().sort({ slug: 1 }),
+      resolve: () => LegalDocModel.find().sort({ slug: 1 }).exec(),
     }),
     legalDoc: t.field({
       type: LegalDocRef,
       nullable: true,
       args: { slug: t.arg.string({ required: true }) },
-      resolve: (_p, { slug }) => LegalDocModel.findOne({ slug }),
+      resolve: (_p, { slug }) => LegalDocModel.findOne({ slug }).exec(),
     }),
     page: t.field({
       type: PageRef,
       nullable: true,
       args: { key: t.arg.string({ required: true }) },
-      resolve: (_p, { key }) => PageModel.findOne({ key }),
+      resolve: (_p, { key }) => PageModel.findOne({ key }).exec(),
     }),
   }));
 }

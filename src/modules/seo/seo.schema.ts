@@ -175,7 +175,7 @@ export function registerSeoModule() {
 
     redirects: t.field({
       type: [RedirectRef],
-      resolve: () => RedirectModel.find().sort({ from: 1 }),
+      resolve: () => RedirectModel.find().sort({ from: 1 }).exec(),
     }),
 
     announcementBar: t.field({

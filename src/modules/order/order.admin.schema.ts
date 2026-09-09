@@ -67,7 +67,7 @@ export function registerOrderAdminModule() {
       nullable: true,
       authScopes: { permission: "orders.view" },
       args: { orderNo: t.arg.string({ required: true }) },
-      resolve: (_p, { orderNo }) => OrderModel.findOne({ orderNo }),
+      resolve: (_p, { orderNo }) => OrderModel.findOne({ orderNo }).exec(),
     }),
   }));
 

@@ -373,7 +373,7 @@ describe("users admin", () => {
 
     const res = await gql(
       `mutation ($id: ID!) { setUserRoles(userId: $id, roles: [customer]) { roles } }`,
-      { id: String(admin2._id) },
+      { id: String(admin2!._id) },
       asAdmin,
     );
     expect(res.data.setUserRoles.roles).toEqual(["customer"]);

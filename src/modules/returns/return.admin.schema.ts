@@ -53,7 +53,7 @@ export function registerReturnAdminModule() {
       nullable: true,
       authScopes: { permission: "returns.view" },
       args: { returnNo: t.arg.string({ required: true }) },
-      resolve: (_p, { returnNo }) => ReturnModel.findOne({ returnNo }),
+      resolve: (_p, { returnNo }) => ReturnModel.findOne({ returnNo }).exec(),
     }),
   }));
 

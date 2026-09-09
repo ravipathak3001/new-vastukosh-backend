@@ -187,7 +187,7 @@ export function registerCatalogModule() {
       type: ProductRef,
       nullable: true,
       args: { slug: t.arg.string({ required: true }) },
-      resolve: (_p, { slug }) => ProductModel.findOne({ slug, status: "active" }),
+      resolve: (_p, { slug }) => ProductModel.findOne({ slug, status: "active" }).exec(),
     }),
 
     featuredProducts: t.field({
