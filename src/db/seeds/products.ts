@@ -16,6 +16,7 @@ export type ProductSeed = {
   category: string;
   rashis: string[];
   needs: string[];
+  grahas?: string[];
   image: string;
   gallery?: string[];
   featured?: boolean;
@@ -129,6 +130,7 @@ export const productSeeds: ProductSeed[] = [
     category: "crystals",
     rashis: ["vrishabha", "tula", "karka"],
     needs: ["prosperity", "peace"],
+    grahas: ["Venus"],
     image:
       G +
       "AB6AXuCcmEFl7f6kOQphA2yJ5Rpx7oT-4Z7rgDYHqhoTcC9gCtVjZBwhinUF0IJOunWTg8ouFcz8jZZkhp0nN4PxOdmj5wOOGbcbTrEpfKinsXpktfML98gxplxaI6vxbUqX3lKAGp7EcCmmhlNoaPXzT_AzM9OW-7wArUB47Z-SU3cn2kLhWKlLEpho1oNa_kjPvhj-NkbAM9reMAm3ncIphEkihPWOau3pDj7VpxMBGDLS88rh-SJ5B4Psxw",
@@ -237,6 +239,7 @@ export const productSeeds: ProductSeed[] = [
     category: "crystals",
     rashis: ["simha", "dhanu", "makara"],
     needs: ["prosperity"],
+    grahas: ["Jupiter"],
     image:
       G +
       "AB6AXuA1IeRCZq4yCmBtBociieaP1-nLs3NX0kFlGeLRTimjtFGZilaTvJBLPDLZISewbfIkQlWMA1KEm-ttgk96wpXPqNCh19v5qIY4AuB2I_RGDFfmTf7xD5A_9rluuLOebzdcDcXCD1JcsnB3s64R8fcW85KsVp5wi6ETGV3-KVuNb7UkffCcS5QVYj9KlCb1ztWYY-ECj5Ubtf31wTD1C-0OoaY6yLZCPtGzkHZ1KWxYzHngigUR5SntKA",

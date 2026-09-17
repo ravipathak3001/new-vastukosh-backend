@@ -21,6 +21,9 @@ import { registerConsultationAdminModule } from "../modules/consultation/consult
 import { registerMarketingModule } from "../modules/marketing/marketing.schema.js";
 import { registerMarketingAdminModule } from "../modules/marketing/marketing.admin.schema.js";
 import { registerPanchangModule } from "../modules/panchang/panchang.schema.js";
+import { registerKundaliModule } from "../modules/kundali/kundali.schema.js";
+import { registerDailyModule } from "../modules/daily/daily.schema.js";
+import { registerDailyAdminModule } from "../modules/daily/daily.admin.schema.js";
 
 /**
  * The single composition point. Every domain module contributes its types and
@@ -53,6 +56,9 @@ export function buildSchema() {
   registerMarketingModule();
   registerMarketingAdminModule();
   registerPanchangModule();
+  registerKundaliModule();
+  registerDailyModule();
+  registerDailyAdminModule();
 
   built = builder.toSchema();
   return built;

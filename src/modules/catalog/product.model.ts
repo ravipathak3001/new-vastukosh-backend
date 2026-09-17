@@ -43,6 +43,7 @@ const productSchema = new Schema(
     category: { type: String, enum: PRODUCT_CATEGORIES, required: true, index: true },
     rashis: { type: [String], default: [], index: true },
     needs: { type: [String], enum: PRODUCT_NEEDS, default: [], index: true },
+    grahas: { type: [String], default: [], index: true },
     image: { type: String, required: true },
     gallery: { type: [String], default: [] },
     featured: { type: Boolean, default: false, index: true },

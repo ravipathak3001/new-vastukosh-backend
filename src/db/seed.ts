@@ -17,12 +17,22 @@ import {
 } from "../modules/content/content.model.js";
 import { PromoModel } from "../modules/cart/cart.model.js";
 import { ConsultationServiceModel } from "../modules/consultation/consultation.model.js";
+import {
+  DailyCardModel,
+  DailyMantraModel,
+  DailyVerseModel,
+} from "../modules/daily/daily.model.js";
 import { SiteSettingsModel } from "../modules/seo/site-settings.model.js";
 import { AnnouncementModel } from "../modules/seo/announcement.model.js";
 import { UserModel } from "../modules/auth/auth.model.js";
 import { ensureSuperAdminRole } from "../modules/roles/role.service.js";
 import { productSeeds } from "./seeds/products.js";
 import { rashiSeeds } from "./seeds/rashis.js";
+import {
+  dailyCardSeeds,
+  dailyMantraSeeds,
+  dailyVerseSeeds,
+} from "./seeds/daily.js";
 import {
   faqSeeds,
   legalSeeds,
@@ -68,6 +78,9 @@ async function main() {
       PageModel.deleteMany({}),
       PromoModel.deleteMany({}),
       ConsultationServiceModel.deleteMany({}),
+      DailyMantraModel.deleteMany({}),
+      DailyVerseModel.deleteMany({}),
+      DailyCardModel.deleteMany({}),
     ]);
   }
 
@@ -84,6 +97,9 @@ async function main() {
   await upsertMany(PageModel, pageSeeds, "key");
   await upsertMany(PromoModel, promoSeeds, "code");
   await upsertMany(ConsultationServiceModel, consultationServiceSeeds, "key");
+  await upsertMany(DailyMantraModel, dailyMantraSeeds, "key");
+  await upsertMany(DailyVerseModel, dailyVerseSeeds, "key");
+  await upsertMany(DailyCardModel, dailyCardSeeds, "key");
   await SiteSettingsModel.updateOne(
     { key: "default" },
     { $set: siteSettingsSeed },
@@ -127,6 +143,9 @@ async function main() {
     pages: await PageModel.countDocuments(),
     promos: await PromoModel.countDocuments(),
     consultationServices: await ConsultationServiceModel.countDocuments(),
+    dailyMantras: await DailyMantraModel.countDocuments(),
+    dailyVerses: await DailyVerseModel.countDocuments(),
+    dailyCards: await DailyCardModel.countDocuments(),
   };
   logger.info(counts, "Seed complete");
 

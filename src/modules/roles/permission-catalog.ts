@@ -45,6 +45,13 @@ export const PERMISSION_CATALOG = [
     label: "Edit testimonials, FAQs, legal docs, and pages",
   },
 
+  { key: "daily.view", category: "Daily", label: "View daily mantras, verses, and share cards" },
+  {
+    key: "daily.manage",
+    category: "Daily",
+    label: "Edit daily mantras, Sanskrit verses, and shareable cards",
+  },
+
   { key: "marketing.view", category: "Marketing", label: "View contact inbox and subscribers" },
   {
     key: "marketing.manage",

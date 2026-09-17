@@ -336,6 +336,81 @@ type ContactSubmission {
   subject: String
 }
 
+type DailyCard {
+  caption: LocalizedString
+  date: String
+  id: ID
+  imageUrl: String
+  key: String
+  order: Int
+  published: Boolean
+  title: LocalizedString
+}
+
+input DailyCardInput {
+  caption: JSON
+  date: String
+  imageUrl: String
+  key: String!
+  order: Int
+  published: Boolean
+  title: JSON
+}
+
+type DailyMantra {
+  artwork: String
+  audioUrl: String
+  date: String
+  deity: String
+  durationSeconds: Int
+  id: ID
+  key: String
+  meaning: LocalizedString
+  order: Int
+  published: Boolean
+  sanskrit: String
+  title: LocalizedString
+  transliteration: String
+}
+
+input DailyMantraInput {
+  artwork: String
+  audioUrl: String
+  date: String
+  deity: String
+  durationSeconds: Int
+  key: String!
+  meaning: JSON
+  order: Int
+  published: Boolean
+  sanskrit: String
+  title: JSON
+  transliteration: String
+}
+
+type DailyVerse {
+  date: String
+  id: ID
+  key: String
+  meaning: LocalizedString
+  order: Int
+  published: Boolean
+  sanskrit: String
+  source: String
+  transliteration: String
+}
+
+input DailyVerseInput {
+  date: String
+  key: String!
+  meaning: JSON
+  order: Int
+  published: Boolean
+  sanskrit: String
+  source: String
+  transliteration: String
+}
+
 """
 A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `date-time` format outlined in section 5.6 of the RFC 3339 profile of the ISO 8601 standard for representation of dates and times using the Gregorian calendar.
 """
@@ -362,6 +437,101 @@ input FaqInput {
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
 scalar JSON
+
+enum KundaliAyanamsa {
+  fagan_bradley
+  kp
+  lahiri
+  raman
+}
+
+"""One house (bhāva) of the D1 whole-sign chart, from the lagna."""
+type KundaliBhava {
+  """Grahas placed in this house."""
+  grahas: [String!]
+
+  """1 (lagna) – 12."""
+  house: Int
+
+  """1 (Mesha) – 12 (Meena) — the sign occupying this house."""
+  rashi: Int
+  rashiName: LocalizedString
+}
+
+"""The Vimśottarī Mahādaśā (and nested Antardaśā) running as of now."""
+type KundaliMahadasha {
+  antardashaEnd: DateTime
+  antardashaLord: String
+  antardashaLordName: LocalizedString
+  antardashaStart: DateTime
+  end: DateTime
+  lord: String
+  lordName: LocalizedString
+  start: DateTime
+}
+
+type KundaliNakshatra {
+  name: LocalizedString
+
+  """1–4."""
+  pada: Int
+}
+
+type KundaliPlanetMatch {
+  gemstone: LocalizedString
+  planet: String
+  planetName: LocalizedString
+  relationToLagnaLord: PlanetRelation
+  relationToMahadashaLord: PlanetRelation
+}
+
+"""
+A birth chart's ascendant, Moon sign, current Mahādaśā, and gemstone-relevant planetary relationships, computed by vedic-kundali. Not certified astrological advice — see the package's own accuracy notes.
+"""
+type KundaliRecommendation {
+  ascendant: KundaliSignPlacement
+
+  """
+  Grahas hostile to the Lagna lord and/or the Mahādaśā lord — gemstones to avoid.
+  """
+  cautionPlanets: [KundaliPlanetMatch!]
+
+  """
+  Same D1 placements, houses renumbered from the Moon instead of the lagna — the Chandra Kuṇḍalī.
+  """
+  chandraHouses: [KundaliBhava!]
+  currentMahadasha: KundaliMahadasha
+
+  """
+  Grahas friendly to the Lagna lord and/or the Mahādaśā lord — recommended gemstones.
+  """
+  favorablePlanets: [KundaliPlanetMatch!]
+
+  """
+  The D1 (Rāśi) chart's 12 whole-sign houses from the lagna, for rendering a chart — e.g. North Indian style.
+  """
+  houses: [KundaliBhava!]
+  moonSign: KundaliSignPlacement
+  nakshatra: KundaliNakshatra
+
+  """
+  All nine grahas, each related to both the Lagna lord and the Mahādaśā lord.
+  """
+  planetRelations: [KundaliPlanetMatch!]
+}
+
+type KundaliSignPlacement {
+  """0–30 degrees elapsed within the rashi."""
+  degreeInRashi: Float
+
+  """The graha ruling this rashi."""
+  lord: String
+  lordName: LocalizedString
+
+  """1 (Mesha) – 12 (Meena)."""
+  rashi: Int
+  rashiName: LocalizedString
+}
 
 type LegalDoc {
   effectiveDate: DateTime
@@ -421,6 +591,9 @@ type Mutation {
   clearPromo(anonId: String): Cart
   createRole(input: AdminRoleInput!): AdminRole
   deleteCollection(slug: String!): Boolean
+  deleteDailyCard(key: String!): Boolean
+  deleteDailyMantra(key: String!): Boolean
+  deleteDailyVerse(key: String!): Boolean
   deleteFaq(id: ID!): Boolean
   deleteLegalDoc(slug: String!): Boolean
   deletePromo(code: String!): Boolean
@@ -461,6 +634,9 @@ type Mutation {
   updateSubscriberStatus(email: String!, status: SubscriberStatus!): NewsletterSubscriber
   upsertCollection(input: CollectionInput!): Collection
   upsertConsultationService(input: ConsultationServiceInput!): ConsultationService
+  upsertDailyCard(input: DailyCardInput!): DailyCard
+  upsertDailyMantra(input: DailyMantraInput!): DailyMantra
+  upsertDailyVerse(input: DailyVerseInput!): DailyVerse
   upsertFaq(input: FaqInput!): Faq
   upsertLegalDoc(input: LegalDocInput!): LegalDoc
   upsertPage(input: PageInput!): Page
@@ -758,6 +934,18 @@ type PlaceOrderResult {
   order: Order
 }
 
+"""
+Pañchadhā (compound) Maitri — natural (fixed) friendship combined with temporal (this chart's house placements) friendship. SELF marks the reference planet itself.
+"""
+enum PlanetRelation {
+  ENEMY
+  FRIEND
+  GREAT_ENEMY
+  GREAT_FRIEND
+  NEUTRAL
+  SELF
+}
+
 type Product {
   category: ProductCategory
   currency: String
@@ -765,6 +953,11 @@ type Product {
   details: [ProductDetail!]
   featured: Boolean
   gallery: [String!]
+
+  """
+  Graha slugs (sun, moon, mars, mercury, jupiter, venus, saturn, rahu, ketu) this gemstone/product is associated with.
+  """
+  grahas: [String!]
   highlights: [LocalizedString!]
   id: ID
   image: String
@@ -799,6 +992,7 @@ type ProductDetail {
 input ProductFilterInput {
   category: ProductCategory
   featured: Boolean
+  graha: String
   need: ProductNeed
   rashi: String
   search: String
@@ -810,6 +1004,7 @@ input ProductInput {
   details: [JSON!]
   featured: Boolean
   gallery: [String!]
+  grahas: [String!]
   highlights: [JSON!]
   image: String
   mrp: Float
@@ -883,6 +1078,9 @@ type Query {
   adminCollections: [Collection!]
   adminConsultationServices: [ConsultationService!]
   adminContactSubmissions(filter: AdminContactFilterInput, page: Int, pageSize: Int): AdminContactPage
+  adminDailyCards: [DailyCard!]
+  adminDailyMantras: [DailyMantra!]
+  adminDailyVerses: [DailyVerse!]
   adminDashboard: AdminDashboardStats
   adminFaqs: [Faq!]
   adminLegalDocs: [LegalDoc!]
@@ -906,8 +1104,36 @@ type Query {
   collection(slug: String!): Collection
   collections: [Collection!]
   consultationServices: [ConsultationService!]
+  dailyCards(limit: Int): [DailyCard!]
+  dailyMantra: DailyMantra
+  dailyVerse: DailyVerse
   faqs: [Faq!]
   featuredProducts(limit: Int): [Product!]
+
+  """
+  Compute a birth chart and its current Mahādaśā, and work out which grahas (and their gemstones) are astrologically favorable vs. ones to approach with caution.
+  """
+  kundaliRecommendation(
+    """Sidereal zodiac. Default lahiri."""
+    ayanamsa: KundaliAyanamsa
+
+    """Birth date, yyyy-mm-dd."""
+    date: String!
+
+    """Birth-place latitude, north positive."""
+    latitude: Float!
+
+    """Birth-place longitude, east positive."""
+    longitude: Float!
+
+    """
+    Birth wall-clock time, HH:MM or HH:MM:SS (24-hour), read in `timezone`.
+    """
+    time: String!
+
+    """IANA timezone id. Default Asia/Kolkata."""
+    timezone: String
+  ): KundaliRecommendation
   legalDoc(slug: String!): LegalDoc
   legalDocs: [LegalDoc!]
   me: User

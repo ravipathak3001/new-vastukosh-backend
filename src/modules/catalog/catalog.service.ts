@@ -17,6 +17,7 @@ export type ProductFilter = {
   category?: ProductCategory;
   need?: ProductNeed;
   rashi?: string;
+  graha?: string;
   featured?: boolean;
   search?: string;
 };
@@ -36,6 +37,7 @@ function toQuery(filter: ProductFilter = {}): FilterQuery<Product> {
   if (filter.category) q.category = filter.category;
   if (filter.need) q.needs = filter.need;
   if (filter.rashi) q.rashis = filter.rashi;
+  if (filter.graha) q.grahas = filter.graha;
   if (typeof filter.featured === "boolean") q.featured = filter.featured;
   if (filter.search?.trim()) {
     const rx = new RegExp(filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
