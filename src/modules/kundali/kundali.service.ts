@@ -165,16 +165,48 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   }
   const antar = chain[1] ?? null;
 
-  const lagnaLord = rashiLord(k.ascendant.rashi);
+  /**
+   * Workaround for a confirmed bug in vedic-kundali@0.1.0: `computeAscendant`
+   * returns the Descendant — the tropical longitude is off by exactly
+   * 180°/6 rashis from the true Ascendant. Verified against drikpanchang.com
+   * for a real birth chart (every graha's rashi matched exactly once the
+   * lagna was shifted by 6 houses) and confirmed independently via the
+   * rising-sign-vs-time-since-sunrise sanity check. Every other placement
+   * (grahas, Moon sign, nakshatra, dasha) comes out correct — only the
+   * ascendant and the lagna-based houses derived from it need correcting.
+   * Degree-within-rashi is unaffected since 180° is an exact multiple of 30°.
+   */
+  const rashiNameRawByRashi = new Map(k.houses.map((h) => [h.rashi, h.rashiName]));
+  const grahasByRashi = new Map(k.houses.map((h) => [h.rashi, h.grahas]));
+  const ascendantRashi = ((k.ascendant.rashi - 1 + 6) % 12) + 1;
+  const ascendant: SignPlacementView = {
+    rashi: ascendantRashi,
+    rashiName: localized(rashiNameRawByRashi.get(ascendantRashi)!),
+    degreeInRashi: k.ascendant.degreeInRashi,
+    lord: rashiLord(ascendantRashi),
+    lordName: localized(GRAHA_NAMES[rashiLord(ascendantRashi)]),
+  };
+  const correctedHouses: Bhava[] = Array.from({ length: 12 }, (_, i) => {
+    const house = i + 1;
+    const rashi = ((ascendantRashi - 1 + i) % 12) + 1;
+    return {
+      house,
+      rashi,
+      rashiName: rashiNameRawByRashi.get(rashi)!,
+      grahas: grahasByRashi.get(rashi) ?? [],
+    };
+  });
+
+  const lagnaLord = rashiLord(ascendant.rashi);
   const mahadashaLord = maha.lord;
 
   const planetRelations: PlanetMatchView[] = GRAHA_ORDER.map((g) => ({
     planet: g,
     planetName: localized(GRAHA_NAMES[g]),
     gemstone: GEMSTONE_BY_GRAHA[g],
-    relationToLagnaLord: g === lagnaLord ? "SELF" : compoundRelation(lagnaLord, g, k.houses),
+    relationToLagnaLord: g === lagnaLord ? "SELF" : compoundRelation(lagnaLord, g, correctedHouses),
     relationToMahadashaLord:
-      g === mahadashaLord ? "SELF" : compoundRelation(mahadashaLord, g, k.houses),
+      g === mahadashaLord ? "SELF" : compoundRelation(mahadashaLord, g, correctedHouses),
   }));
 
   const favorablePlanets = planetRelations.filter(
@@ -189,13 +221,7 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   );
 
   return {
-    ascendant: {
-      rashi: k.ascendant.rashi,
-      rashiName: localized(k.ascendant.rashiName),
-      degreeInRashi: k.ascendant.degreeInRashi,
-      lord: lagnaLord,
-      lordName: localized(GRAHA_NAMES[lagnaLord]),
-    },
+    ascendant,
     moonSign: {
       rashi: k.moonSign,
       rashiName: localized(k.moonSignName),
@@ -217,7 +243,7 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     planetRelations,
     favorablePlanets,
     cautionPlanets,
-    houses: k.houses.map(toBhavaView),
+    houses: correctedHouses.map(toBhavaView),
     chandraHouses: k.chandraKundaliHouses.map(toBhavaView),
   };
 }

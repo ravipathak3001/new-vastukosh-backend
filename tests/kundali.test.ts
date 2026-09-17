@@ -8,8 +8,15 @@ import { makeExecutor } from "./helpers.js";
  * accuracy tests. We check that the resolver reaches the library and returns
  * the same chart/dasha the library itself produces, and that the compound
  * friendship + gemstone matching is internally consistent.
+ *
+ * One deliberate exception: `vedic-kundali@0.1.0`'s `computeAscendant` returns
+ * the Descendant (tropical longitude off by exactly 180°/6 rashis) — see the
+ * workaround and its verification notes in `kundali.service.ts`. The resolver
+ * corrects for it, so its ascendant/houses are the library's shifted by 6
+ * rashis/houses, not identical to `k.ascendant`/`k.houses`.
  */
 const gql = makeExecutor();
+const shiftSixRashis = (rashi: number) => ((rashi - 1 + 6) % 12) + 1;
 
 const QUERY = `
   query ($date: String!, $time: String!, $lat: Float!, $lng: Float!) {
@@ -46,8 +53,11 @@ describe("kundaliRecommendation query", () => {
     const dasha = vimshottariDasha(k);
     const chain = activeDashaChain(dasha.mahadashas);
 
-    expect(r.ascendant.rashi).toBe(k.ascendant.rashi);
-    expect(r.ascendant.rashiName.en).toBe(k.ascendant.rashiName.iast);
+    const correctedAscendantRashi = shiftSixRashis(k.ascendant.rashi);
+    expect(r.ascendant.rashi).toBe(correctedAscendantRashi);
+    expect(r.ascendant.rashiName.en).toBe(
+      k.houses.find((h) => h.rashi === correctedAscendantRashi)?.rashiName.iast,
+    );
     expect(r.moonSign.rashi).toBe(k.moonSign);
     expect(r.nakshatra.name.en).toBe(k.nakshatra.name.iast);
     expect(r.nakshatra.pada).toBe(k.nakshatra.pada);
@@ -106,7 +116,8 @@ describe("kundaliRecommendation query", () => {
     expect(allPlacedGrahas.sort()).toEqual([...GRAHA_ORDER].sort());
 
     for (const bhava of k.houses) {
-      const match = r.houses.find((h: { house: number }) => h.house === bhava.house);
+      const correctedHouse = ((bhava.house - 1 + 6) % 12) + 1;
+      const match = r.houses.find((h: { house: number }) => h.house === correctedHouse);
       expect(match.rashi).toBe(bhava.rashi);
       expect(match.grahas.sort()).toEqual([...bhava.grahas].sort());
     }
