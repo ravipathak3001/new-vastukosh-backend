@@ -168,13 +168,22 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   /**
    * Workaround for a confirmed bug in vedic-kundali@0.1.0: `computeAscendant`
    * returns the Descendant — the tropical longitude is off by exactly
-   * 180°/6 rashis from the true Ascendant. Verified against drikpanchang.com
-   * for a real birth chart (every graha's rashi matched exactly once the
-   * lagna was shifted by 6 houses) and confirmed independently via the
-   * rising-sign-vs-time-since-sunrise sanity check. Every other placement
-   * (grahas, Moon sign, nakshatra, dasha) comes out correct — only the
-   * ascendant and the lagna-based houses derived from it need correcting.
-   * Degree-within-rashi is unaffected since 180° is an exact multiple of 30°.
+   * 180°/6 rashis from the true Ascendant. Confirmed against Swiss Ephemeris
+   * (`pyswisseph`, sidereal/Lahiri) across five varied birth cases spanning
+   * both hemispheres and east/west longitudes: the raw rashi is 6 away from
+   * Swiss Ephemeris's every time, with degree-within-rashi matching exactly
+   * (i.e. a clean 180° flip, not a subtler error). Every other placement
+   * (grahas, Moon sign, nakshatra, dasha) matches Swiss Ephemeris directly —
+   * only the ascendant and the lagna-based houses derived from it need
+   * correcting. Degree-within-rashi is unaffected since 180° is an exact
+   * multiple of 30°.
+   *
+   * Do NOT "re-verify" this by re-deriving the ascendant from the textbook
+   * RAMC-based formula (Meeus 13.6) — that formula's `atan2` has a quadrant
+   * ambiguity (it can return either the Ascendant or the Descendant, 180°
+   * apart, depending on argument-sign convention), and a naive re-derivation
+   * reproduces the *same* bug rather than catching it. Cross-check against an
+   * independent implementation (Swiss Ephemeris) instead.
    */
   const rashiNameRawByRashi = new Map(k.houses.map((h) => [h.rashi, h.rashiName]));
   const grahasByRashi = new Map(k.houses.map((h) => [h.rashi, h.grahas]));

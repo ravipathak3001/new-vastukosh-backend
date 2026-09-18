@@ -11,9 +11,9 @@ import { makeExecutor } from "./helpers.js";
  *
  * One deliberate exception: `vedic-kundali@0.1.0`'s `computeAscendant` returns
  * the Descendant (tropical longitude off by exactly 180°/6 rashis) — see the
- * workaround and its verification notes in `kundali.service.ts`. The resolver
- * corrects for it, so its ascendant/houses are the library's shifted by 6
- * rashis/houses, not identical to `k.ascendant`/`k.houses`.
+ * workaround and its Swiss-Ephemeris-verified notes in `kundali.service.ts`.
+ * The resolver corrects for it, so its ascendant/houses are the library's
+ * shifted by 6 rashis/houses, not identical to `k.ascendant`/`k.houses`.
  */
 const gql = makeExecutor();
 const shiftSixRashis = (rashi: number) => ((rashi - 1 + 6) % 12) + 1;
