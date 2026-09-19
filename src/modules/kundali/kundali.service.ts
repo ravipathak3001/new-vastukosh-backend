@@ -2,13 +2,16 @@ import {
   generateKundali,
   vimshottariDasha,
   activeDashaChain,
+  ascendantTropicalLongitude,
+  rashiPlacement,
+  wholeSignHouses,
   GRAHA_ORDER,
   GRAHA_NAMES,
   type Kundali,
   type GrahaName,
   type Bhava,
 } from "vedic-kundali";
-import type { AyanamsaSystem, Name } from "vedic-panchanga";
+import { dateToJD, type AyanamsaSystem, type Name } from "vedic-panchanga";
 import { badInput } from "../../shared/errors.js";
 import type { LocalizedString } from "../../shared/localized.js";
 import { rashiLord, naturalRelation, GEMSTONE_BY_GRAHA } from "./graha-reference.js";
@@ -166,45 +169,45 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   const antar = chain[1] ?? null;
 
   /**
-   * Workaround for a confirmed bug in vedic-kundali@0.1.0: `computeAscendant`
-   * returns the Descendant — the tropical longitude is off by exactly
-   * 180°/6 rashis from the true Ascendant. Confirmed against Swiss Ephemeris
-   * (`pyswisseph`, sidereal/Lahiri) across five varied birth cases spanning
-   * both hemispheres and east/west longitudes: the raw rashi is 6 away from
-   * Swiss Ephemeris's every time, with degree-within-rashi matching exactly
-   * (i.e. a clean 180° flip, not a subtler error). Every other placement
-   * (grahas, Moon sign, nakshatra, dasha) matches Swiss Ephemeris directly —
-   * only the ascendant and the lagna-based houses derived from it need
-   * correcting. Degree-within-rashi is unaffected since 180° is an exact
-   * multiple of 30°.
+   * Workaround for a confirmed bug in vedic-kundali@0.1.0: `ascendantTropicalLongitude`
+   * (and hence `computeAscendant`, which is built on it) returns the
+   * Descendant, not the Ascendant — off by exactly 180°. Confirmed against
+   * Swiss Ephemeris (`pyswisseph`, sidereal/Lahiri) across five varied birth
+   * cases spanning both hemispheres and east/west longitudes: adding 180°
+   * back reproduces Swiss Ephemeris exactly every time. Every other
+   * placement (grahas, Moon sign, nakshatra, dasha) matches Swiss Ephemeris
+   * directly, so this is the only thing that needs correcting.
+   *
+   * Rather than patch the buggy `k.ascendant.rashi` after the fact, we redo
+   * the actual tropical→sidereal→rāśi conversion ourselves with the 180°
+   * restored, then rebuild the lagna-based houses via the library's own
+   * `wholeSignHouses` — exactly the same call `generateKundali` makes
+   * internally, just with the corrected lagna rāśi. `dateToJD(k.birthInstant)`
+   * reproduces the library's internal `jdUT` exactly (that's how it derived
+   * `birthInstant` in the first place), and `k.ayanamsaValue` is already
+   * `ayanamsa(jdUT, system)`, so no astronomy is re-derived here beyond the
+   * one broken step.
    *
    * Do NOT "re-verify" this by re-deriving the ascendant from the textbook
-   * RAMC-based formula (Meeus 13.6) — that formula's `atan2` has a quadrant
-   * ambiguity (it can return either the Ascendant or the Descendant, 180°
-   * apart, depending on argument-sign convention), and a naive re-derivation
-   * reproduces the *same* bug rather than catching it. Cross-check against an
-   * independent implementation (Swiss Ephemeris) instead.
+   * RAMC-based formula (Meeus 13.6) from scratch — that formula's `atan2` has
+   * a quadrant ambiguity (it can return either the Ascendant or the
+   * Descendant, 180° apart, depending on argument-sign convention), and a
+   * naive re-derivation reproduces the *same* bug rather than catching it.
+   * Cross-check against an independent implementation (Swiss Ephemeris)
+   * instead.
    */
-  const rashiNameRawByRashi = new Map(k.houses.map((h) => [h.rashi, h.rashiName]));
-  const grahasByRashi = new Map(k.houses.map((h) => [h.rashi, h.grahas]));
-  const ascendantRashi = ((k.ascendant.rashi - 1 + 6) % 12) + 1;
+  const jdUT = dateToJD(k.birthInstant);
+  const trueTropicalLongitude = (ascendantTropicalLongitude(jdUT, args.latitude, args.longitude) + 180) % 360;
+  const ascendantSidereal = ((trueTropicalLongitude - k.ayanamsaValue) % 360 + 360) % 360;
+  const ascendantPlacement = rashiPlacement(ascendantSidereal);
   const ascendant: SignPlacementView = {
-    rashi: ascendantRashi,
-    rashiName: localized(rashiNameRawByRashi.get(ascendantRashi)!),
-    degreeInRashi: k.ascendant.degreeInRashi,
-    lord: rashiLord(ascendantRashi),
-    lordName: localized(GRAHA_NAMES[rashiLord(ascendantRashi)]),
+    rashi: ascendantPlacement.rashi,
+    rashiName: localized(ascendantPlacement.rashiName),
+    degreeInRashi: ascendantPlacement.degreeInRashi,
+    lord: rashiLord(ascendantPlacement.rashi),
+    lordName: localized(GRAHA_NAMES[rashiLord(ascendantPlacement.rashi)]),
   };
-  const correctedHouses: Bhava[] = Array.from({ length: 12 }, (_, i) => {
-    const house = i + 1;
-    const rashi = ((ascendantRashi - 1 + i) % 12) + 1;
-    return {
-      house,
-      rashi,
-      rashiName: rashiNameRawByRashi.get(rashi)!,
-      grahas: grahasByRashi.get(rashi) ?? [],
-    };
-  });
+  const correctedHouses: Bhava[] = wholeSignHouses(ascendant.rashi, (g) => k.grahas[g].rashi);
 
   const lagnaLord = rashiLord(ascendant.rashi);
   const mahadashaLord = maha.lord;
