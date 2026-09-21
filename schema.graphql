@@ -479,10 +479,17 @@ type KundaliNakshatra {
 
 type KundaliPlanetMatch {
   gemstone: LocalizedString
+  lagnaFunctionalNature: PlanetFunctionalNature
   planet: String
   planetName: LocalizedString
   relationToLagnaLord: PlanetRelation
   relationToMahadashaLord: PlanetRelation
+}
+
+type KundaliRashi {
+  """1 (Mesha) – 12 (Meena)."""
+  rashi: Int
+  rashiName: LocalizedString
 }
 
 """
@@ -491,9 +498,7 @@ A birth chart's ascendant, Moon sign, current Mahādaśā, and gemstone-relevant
 type KundaliRecommendation {
   ascendant: KundaliSignPlacement
 
-  """
-  Grahas hostile to the Lagna lord and/or the Mahādaśā lord — gemstones to avoid.
-  """
+  """Grahas functionally malefic for this Lagna — gemstones to avoid."""
   cautionPlanets: [KundaliPlanetMatch!]
 
   """
@@ -502,10 +507,16 @@ type KundaliRecommendation {
   chandraHouses: [KundaliBhava!]
   currentMahadasha: KundaliMahadasha
 
-  """
-  Grahas friendly to the Lagna lord and/or the Mahādaśā lord — recommended gemstones.
-  """
+  """Rāśis ruled by a cautionPlanets graha."""
+  enemyRashis: [KundaliRashi!]
+
+  """Grahas functionally benefic for this Lagna — recommended gemstones."""
   favorablePlanets: [KundaliPlanetMatch!]
+
+  """
+  Rāśis ruled by a favorablePlanets graha, for matching products tagged by rashi as well as by graha. Empty entries are possible if every favorable graha is Rāhu/Ketu, which rule none.
+  """
+  friendlyRashis: [KundaliRashi!]
 
   """
   The D1 (Rāśi) chart's 12 whole-sign houses from the lagna, for rendering a chart — e.g. North Indian style.
@@ -514,10 +525,18 @@ type KundaliRecommendation {
   moonSign: KundaliSignPlacement
   nakshatra: KundaliNakshatra
 
+  """Grahas functionally neutral for this Lagna."""
+  neutralPlanets: [KundaliPlanetMatch!]
+
   """
-  All nine grahas, each related to both the Lagna lord and the Mahādaśā lord.
+  All nine grahas, with their functional nature for this Lagna plus, for reference, their Pañchadhā relation to both the Lagna lord and the Mahādaśā lord.
   """
   planetRelations: [KundaliPlanetMatch!]
+
+  """
+  True when the running Mahādaśā lord's own functional nature for this Lagna is ENEMY — a gemstone match isn't the right remedy here, so callers should steer the shopper to an astrologer consultation instead of the crystal matching from favorablePlanets.
+  """
+  recommendConsultation: Boolean
 }
 
 type KundaliSignPlacement {
@@ -935,7 +954,16 @@ type PlaceOrderResult {
 }
 
 """
-Pañchadhā (compound) Maitri — natural (fixed) friendship combined with temporal (this chart's house placements) friendship. SELF marks the reference planet itself.
+Functional benefic/malefic/neutral nature for this Lagna, fixed per ascendant sign (house lordship: trikona lords are friends, dusthana lords are enemies, the Lagna lord is always a friend, with natural relationship to the Lagna lord as a tie-break otherwise) — the system gemstone recommendations use. Drives favorablePlanets/cautionPlanets/neutralPlanets.
+"""
+enum PlanetFunctionalNature {
+  ENEMY
+  FRIEND
+  NEUTRAL
+}
+
+"""
+Pañchadhā (compound) Maitri — natural (fixed) friendship combined with temporal (this chart's house placements) friendship. SELF marks the reference planet itself. Supplementary reference data — favorablePlanets/cautionPlanets/neutralPlanets are driven by lagnaFunctionalNature instead, not by this field.
 """
 enum PlanetRelation {
   ENEMY
@@ -1111,7 +1139,7 @@ type Query {
   featuredProducts(limit: Int): [Product!]
 
   """
-  Compute a birth chart and its current Mahādaśā, and work out which grahas (and their gemstones) are astrologically favorable vs. ones to approach with caution.
+  Compute a birth chart and its current Mahādaśā, work out which grahas (and their gemstones) are functionally benefic for the Lagna vs. functionally malefic, and flag when the Mahādaśā lord itself is functionally malefic — in which case an astrologer consultation is recommended over a gemstone match.
   """
   kundaliRecommendation(
     """Sidereal zodiac. Default lahiri."""

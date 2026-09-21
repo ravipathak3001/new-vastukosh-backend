@@ -14,16 +14,49 @@ import {
 import { dateToJD, type AyanamsaSystem, type Name } from "vedic-panchanga";
 import { badInput } from "../../shared/errors.js";
 import type { LocalizedString } from "../../shared/localized.js";
-import { rashiLord, naturalRelation, GEMSTONE_BY_GRAHA } from "./graha-reference.js";
+import {
+  rashiLord,
+  naturalRelation,
+  GEMSTONE_BY_GRAHA,
+  rashisRuledBy,
+  functionalNature,
+  rahuKetuFunctionalNature,
+  type ClassicalGraha,
+  type FunctionalNature,
+} from "./graha-reference.js";
 
 /**
  * Thin wrapper over `vedic-kundali`: generates the birth chart + current
- * Vimśottarī Mahādaśā, then works out — relative to *both* the Ascendant
- * (Lagna) lord and the running Mahādaśā lord — which grahas are
- * astrologically favorable vs. ones to approach with caution, via the
- * classical Pañchadhā (compound) friendship: Naisargika (natural, fixed)
- * friendship combined with Tātkālika (temporal, chart-specific) friendship
- * derived from each graha's house position in this exact chart.
+ * Vimśottarī Mahādaśā, then works out which grahas are astrologically
+ * favorable vs. ones to approach with caution — for gemstone recommendation,
+ * via each graha's **functional nature** relative to the Ascendant (Lagna):
+ * fixed per ascendant sign (see `functionalNature` in `graha-reference.ts`),
+ * driven by house lordship (trikona lords are friends, dusthana lords are
+ * enemies, the Lagna lord itself is always a friend even with a secondary
+ * dusthana) with the symmetric natural relationship to the Lagna lord as a
+ * tie-break for grahas that own neither. `favorablePlanets`/`cautionPlanets`/
+ * `neutralPlanets` are an exact partition of all nine grahas by this
+ * `lagnaFunctionalNature` field, exposed per graha in `planetRelations`.
+ *
+ * This is a *different* system from the classical Pañchadhā (compound)
+ * Maitri also exposed per graha (`relationToLagnaLord`/
+ * `relationToMahadashaLord`) — Pañchadhā is chart-placement-dependent
+ * (varies with each graha's exact house in this one chart), whereas
+ * functional nature is fixed for every chart sharing the same ascendant
+ * sign, which is what gemstone-recommendation practice actually uses.
+ * Pañchadhā fields are kept only as supplementary reference data now; they no
+ * longer drive favorablePlanets/cautionPlanets/neutralPlanets.
+ *
+ * `friendlyRashis`/`enemyRashis` are derived from favorable/caution grahas'
+ * own classical sign-lordship (`RASHI_LORDS`), for widening product matching
+ * to rashi-tagged items, not just graha-tagged ones — Rāhu/Ketu rule no
+ * rashi, so they contribute nothing to either list.
+ *
+ * Separately, `recommendConsultation` flags when the currently running
+ * Mahādaśā lord's functional nature is itself ENEMY: in that case a
+ * gemstone match isn't the right remedy, and callers should steer the
+ * shopper to an astrologer consultation instead of the crystal matching
+ * below.
  *
  * Unlike the `panchang` module, this does NOT memoize: panchang's cache key
  * space is small (most requests share "today + default location"), but a
@@ -69,12 +102,6 @@ function compoundRelation(reference: GrahaName, target: GrahaName, houses: Bhava
   return temporal === "friend" ? "NEUTRAL" : "GREAT_ENEMY";
 }
 
-function isFavorable(r: CompoundRelation): boolean {
-  return r === "SELF" || r === "GREAT_FRIEND" || r === "FRIEND";
-}
-function isCaution(r: CompoundRelation): boolean {
-  return r === "ENEMY" || r === "GREAT_ENEMY";
-}
 
 export type SignPlacementView = {
   rashi: number;
@@ -99,6 +126,8 @@ export type PlanetMatchView = {
   planet: GrahaName;
   planetName: LocalizedString;
   gemstone: LocalizedString;
+  /** Functional benefic/malefic/neutral nature for this Lagna — drives favorablePlanets/cautionPlanets/neutralPlanets. */
+  lagnaFunctionalNature: FunctionalNature;
   relationToLagnaLord: CompoundRelation;
   relationToMahadashaLord: CompoundRelation;
 };
@@ -110,6 +139,11 @@ export type BhavaView = {
   grahas: GrahaName[];
 };
 
+export type RashiView = {
+  rashi: number;
+  rashiName: LocalizedString;
+};
+
 export type KundaliRecommendationView = {
   ascendant: SignPlacementView;
   moonSign: SignPlacementView;
@@ -118,6 +152,14 @@ export type KundaliRecommendationView = {
   planetRelations: PlanetMatchView[];
   favorablePlanets: PlanetMatchView[];
   cautionPlanets: PlanetMatchView[];
+  /** Grahas neither friendly nor hostile to the Lagna lord (compound relation NEUTRAL). */
+  neutralPlanets: PlanetMatchView[];
+  /** Rāśis ruled by a favorablePlanets graha — for widening product matching beyond graha tags. */
+  friendlyRashis: RashiView[];
+  /** Rāśis ruled by a cautionPlanets graha. */
+  enemyRashis: RashiView[];
+  /** True when the running Mahādaśā lord is hostile (ENEMY/GREAT_ENEMY) to the Lagna lord. */
+  recommendConsultation: boolean;
   /** D1 (Rāśi) whole-sign houses from the lagna — for a North Indian style chart. */
   houses: BhavaView[];
   /** Same D1 placements, houses renumbered from the Moon instead of the lagna — the Chandra Kuṇḍalī. */
@@ -212,25 +254,42 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   const lagnaLord = rashiLord(ascendant.rashi);
   const mahadashaLord = maha.lord;
 
+  const lagnaFunctionalNatureOf = (g: GrahaName): FunctionalNature => {
+    if (g === "Rahu") return rahuKetuFunctionalNature(k.grahas.Rahu.rashi, ascendant.rashi);
+    if (g === "Ketu") return rahuKetuFunctionalNature(k.grahas.Ketu.rashi, ascendant.rashi);
+    return functionalNature(g as ClassicalGraha, ascendant.rashi);
+  };
+
   const planetRelations: PlanetMatchView[] = GRAHA_ORDER.map((g) => ({
     planet: g,
     planetName: localized(GRAHA_NAMES[g]),
     gemstone: GEMSTONE_BY_GRAHA[g],
+    lagnaFunctionalNature: lagnaFunctionalNatureOf(g),
     relationToLagnaLord: g === lagnaLord ? "SELF" : compoundRelation(lagnaLord, g, correctedHouses),
     relationToMahadashaLord:
       g === mahadashaLord ? "SELF" : compoundRelation(mahadashaLord, g, correctedHouses),
   }));
 
-  const favorablePlanets = planetRelations.filter(
-    (p) =>
-      (isFavorable(p.relationToLagnaLord) && !isCaution(p.relationToMahadashaLord)) ||
-      (isFavorable(p.relationToMahadashaLord) && !isCaution(p.relationToLagnaLord)),
-  );
-  const cautionPlanets = planetRelations.filter(
-    (p) =>
-      !favorablePlanets.includes(p) &&
-      (isCaution(p.relationToLagnaLord) || isCaution(p.relationToMahadashaLord)),
-  );
+  const favorablePlanets = planetRelations.filter((p) => p.lagnaFunctionalNature === "FRIEND");
+  const cautionPlanets = planetRelations.filter((p) => p.lagnaFunctionalNature === "ENEMY");
+  const neutralPlanets = planetRelations.filter((p) => p.lagnaFunctionalNature === "NEUTRAL");
+
+  const mahadashaLordFunctionalNature = planetRelations.find(
+    (p) => p.planet === mahadashaLord,
+  )!.lagnaFunctionalNature;
+  const recommendConsultation = mahadashaLordFunctionalNature === "ENEMY";
+
+  const rashiNameByNumber = new Map(correctedHouses.map((b) => [b.rashi, localized(b.rashiName)]));
+  const rashisFor = (planets: PlanetMatchView[]): RashiView[] => {
+    const nums = new Set<number>();
+    for (const p of planets) for (const rashi of rashisRuledBy(p.planet)) nums.add(rashi);
+    return [...nums].sort((a, b) => a - b).map((rashi) => ({
+      rashi,
+      rashiName: rashiNameByNumber.get(rashi)!,
+    }));
+  };
+  const friendlyRashis = rashisFor(favorablePlanets);
+  const enemyRashis = rashisFor(cautionPlanets);
 
   return {
     ascendant,
@@ -255,6 +314,10 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     planetRelations,
     favorablePlanets,
     cautionPlanets,
+    neutralPlanets,
+    friendlyRashis,
+    enemyRashis,
+    recommendConsultation,
     houses: correctedHouses.map(toBhavaView),
     chandraHouses: k.chandraKundaliHouses.map(toBhavaView),
   };

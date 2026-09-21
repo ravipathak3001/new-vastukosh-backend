@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateKundali, vimshottariDasha, activeDashaChain, GRAHA_ORDER } from "vedic-kundali";
+import { rashiLord } from "../src/modules/kundali/graha-reference.js";
 import { makeExecutor } from "./helpers.js";
 
 /**
@@ -25,9 +26,13 @@ const QUERY = `
       moonSign { rashi rashiName { en } lord }
       nakshatra { name { en } pada }
       currentMahadasha { lord lordName { en } start end antardashaLord antardashaStart antardashaEnd }
-      planetRelations { planet planetName { en } gemstone { en hi } relationToLagnaLord relationToMahadashaLord }
+      planetRelations { planet planetName { en } gemstone { en hi } lagnaFunctionalNature relationToLagnaLord relationToMahadashaLord }
       favorablePlanets { planet }
       cautionPlanets { planet }
+      neutralPlanets { planet }
+      friendlyRashis { rashi rashiName { en } }
+      enemyRashis { rashi rashiName { en } }
+      recommendConsultation
       houses { house rashi rashiName { en } grahas }
       chandraHouses { house rashi rashiName { en } grahas }
     }
@@ -147,12 +152,77 @@ describe("kundaliRecommendation query", () => {
     }
   });
 
-  it("keeps favorablePlanets and cautionPlanets disjoint", async () => {
+  it("keeps favorablePlanets and cautionPlanets disjoint, driven by lagnaFunctionalNature", async () => {
     const res = await gql(QUERY, BIRTH);
     const r = res.data.kundaliRecommendation;
     const favorable = new Set(r.favorablePlanets.map((p: { planet: string }) => p.planet));
     const caution = new Set(r.cautionPlanets.map((p: { planet: string }) => p.planet));
     for (const p of favorable) expect(caution.has(p)).toBe(false);
+
+    for (const p of r.planetRelations) {
+      expect(favorable.has(p.planet)).toBe(p.lagnaFunctionalNature === "FRIEND");
+      expect(caution.has(p.planet)).toBe(p.lagnaFunctionalNature === "ENEMY");
+    }
+  });
+
+  it("flags recommendConsultation exactly when the Mahādaśā lord is hostile to the Lagna lord", async () => {
+    const res = await gql(QUERY, BIRTH);
+    const r = res.data.kundaliRecommendation;
+    const caution = new Set(r.cautionPlanets.map((p: { planet: string }) => p.planet));
+    expect(r.recommendConsultation).toBe(caution.has(r.currentMahadasha.lord));
+  });
+
+  it("partitions all nine grahas exactly across favorablePlanets, cautionPlanets and neutralPlanets", async () => {
+    const res = await gql(QUERY, BIRTH);
+    const r = res.data.kundaliRecommendation;
+    const favorable = r.favorablePlanets.map((p: { planet: string }) => p.planet);
+    const caution = r.cautionPlanets.map((p: { planet: string }) => p.planet);
+    const neutral = r.neutralPlanets.map((p: { planet: string }) => p.planet);
+    const combined = [...favorable, ...caution, ...neutral];
+    expect(combined.sort()).toEqual([...GRAHA_ORDER].sort());
+    expect(new Set(combined).size).toBe(9);
+  });
+
+  it("derives friendlyRashis/enemyRashis from the friend/enemy planets' own sign-lordship", async () => {
+    const res = await gql(QUERY, BIRTH);
+    const r = res.data.kundaliRecommendation;
+    const favorable = new Set(r.favorablePlanets.map((p: { planet: string }) => p.planet));
+    const caution = new Set(r.cautionPlanets.map((p: { planet: string }) => p.planet));
+
+    for (const x of r.friendlyRashis) expect(favorable.has(rashiLord(x.rashi))).toBe(true);
+    for (const x of r.enemyRashis) expect(caution.has(rashiLord(x.rashi))).toBe(true);
+
+    const allRashiNumbers = [...r.friendlyRashis, ...r.enemyRashis].map((x: { rashi: number }) => x.rashi);
+    expect(new Set(allRashiNumbers).size).toBe(allRashiNumbers.length);
+  });
+
+  it("classifies functional nature by house lordship for a Vrishchika (Scorpio) Lagna, not chart-placement Pañchadhā", async () => {
+    // 1949-12-12 07:03, Jaipur — reported case: Lagna Vrishchika (Mars), Mahādaśā lord Saturn.
+    const JAIPUR = { date: "1949-12-12", time: "07:03", lat: 26.9124, lng: 75.7873 };
+    const res = await gql(QUERY, JAIPUR);
+    const r = res.data.kundaliRecommendation;
+
+    expect(r.ascendant.rashiName.en).toBe("Vrishchika");
+    expect(r.ascendant.lord).toBe("Mars");
+    expect(r.currentMahadasha.lord).toBe("Saturn");
+
+    const favorable = new Set(r.favorablePlanets.map((p: { planet: string }) => p.planet));
+    const caution = new Set(r.cautionPlanets.map((p: { planet: string }) => p.planet));
+
+    // Trikona lords (Mars=1st/lagna, Jupiter=5th, Moon=9th) plus Sun (natural friend of Mars, no
+    // house lordship of its own here) are friends; dusthana lords (Mercury=8th, Venus=12th) plus
+    // Saturn (natural enemy of Mars, owns neither trikona nor dusthana) are enemies.
+    expect(favorable.has("Mars")).toBe(true);
+    expect(favorable.has("Moon")).toBe(true);
+    expect(favorable.has("Jupiter")).toBe(true);
+    expect(favorable.has("Sun")).toBe(true);
+    expect(caution.has("Mercury")).toBe(true);
+    expect(caution.has("Venus")).toBe(true);
+    expect(caution.has("Saturn")).toBe(true);
+
+    // The running Mahādaśā lord (Saturn) is itself functionally malefic here, so a consultation
+    // is recommended instead of a gemstone match — the exact bug reported for this chart.
+    expect(r.recommendConsultation).toBe(true);
   });
 
   it("rejects a malformed birth date", async () => {

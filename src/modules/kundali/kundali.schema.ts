@@ -6,6 +6,7 @@ import {
   type MahadashaView,
   type PlanetMatchView,
   type BhavaView,
+  type RashiView,
   type KundaliRecommendationView,
 } from "./kundali.service.js";
 
@@ -17,7 +18,18 @@ const CompoundRelationEnum = builder.enumType("PlanetRelation", {
   values: ["GREAT_FRIEND", "FRIEND", "NEUTRAL", "ENEMY", "GREAT_ENEMY", "SELF"] as const,
   description:
     "Pañchadhā (compound) Maitri — natural (fixed) friendship combined with temporal " +
-    "(this chart's house placements) friendship. SELF marks the reference planet itself.",
+    "(this chart's house placements) friendship. SELF marks the reference planet itself. " +
+    "Supplementary reference data — favorablePlanets/cautionPlanets/neutralPlanets are driven " +
+    "by lagnaFunctionalNature instead, not by this field.",
+});
+
+const FunctionalNatureEnum = builder.enumType("PlanetFunctionalNature", {
+  values: ["FRIEND", "NEUTRAL", "ENEMY"] as const,
+  description:
+    "Functional benefic/malefic/neutral nature for this Lagna, fixed per ascendant sign (house " +
+    "lordship: trikona lords are friends, dusthana lords are enemies, the Lagna lord is always a " +
+    "friend, with natural relationship to the Lagna lord as a tie-break otherwise) — the system " +
+    "gemstone recommendations use. Drives favorablePlanets/cautionPlanets/neutralPlanets.",
 });
 
 const SignPlacementRef = builder.objectRef<SignPlacementView>("KundaliSignPlacement").implement({
@@ -62,6 +74,10 @@ const PlanetMatchRef = builder.objectRef<PlanetMatchView>("KundaliPlanetMatch").
     planet: t.exposeString("planet"),
     planetName: t.field({ type: LocalizedStringRef, resolve: (p) => p.planetName }),
     gemstone: t.field({ type: LocalizedStringRef, resolve: (p) => p.gemstone }),
+    lagnaFunctionalNature: t.field({
+      type: FunctionalNatureEnum,
+      resolve: (p) => p.lagnaFunctionalNature,
+    }),
     relationToLagnaLord: t.field({ type: CompoundRelationEnum, resolve: (p) => p.relationToLagnaLord }),
     relationToMahadashaLord: t.field({
       type: CompoundRelationEnum,
@@ -80,6 +96,13 @@ const KundaliBhavaRef = builder.objectRef<BhavaView>("KundaliBhava").implement({
   }),
 });
 
+const KundaliRashiRef = builder.objectRef<RashiView>("KundaliRashi").implement({
+  fields: (t) => ({
+    rashi: t.exposeInt("rashi", { description: "1 (Mesha) – 12 (Meena)." }),
+    rashiName: t.field({ type: LocalizedStringRef, resolve: (r) => r.rashiName }),
+  }),
+});
+
 const KundaliRecommendationRef = builder
   .objectRef<KundaliRecommendationView>("KundaliRecommendation")
   .implement({
@@ -95,17 +118,42 @@ const KundaliRecommendationRef = builder
       planetRelations: t.field({
         type: [PlanetMatchRef],
         resolve: (k) => k.planetRelations,
-        description: "All nine grahas, each related to both the Lagna lord and the Mahādaśā lord.",
+        description:
+          "All nine grahas, with their functional nature for this Lagna plus, for reference, " +
+          "their Pañchadhā relation to both the Lagna lord and the Mahādaśā lord.",
       }),
       favorablePlanets: t.field({
         type: [PlanetMatchRef],
         resolve: (k) => k.favorablePlanets,
-        description: "Grahas friendly to the Lagna lord and/or the Mahādaśā lord — recommended gemstones.",
+        description: "Grahas functionally benefic for this Lagna — recommended gemstones.",
       }),
       cautionPlanets: t.field({
         type: [PlanetMatchRef],
         resolve: (k) => k.cautionPlanets,
-        description: "Grahas hostile to the Lagna lord and/or the Mahādaśā lord — gemstones to avoid.",
+        description: "Grahas functionally malefic for this Lagna — gemstones to avoid.",
+      }),
+      neutralPlanets: t.field({
+        type: [PlanetMatchRef],
+        resolve: (k) => k.neutralPlanets,
+        description: "Grahas functionally neutral for this Lagna.",
+      }),
+      friendlyRashis: t.field({
+        type: [KundaliRashiRef],
+        resolve: (k) => k.friendlyRashis,
+        description:
+          "Rāśis ruled by a favorablePlanets graha, for matching products tagged by rashi as well " +
+          "as by graha. Empty entries are possible if every favorable graha is Rāhu/Ketu, which rule none.",
+      }),
+      enemyRashis: t.field({
+        type: [KundaliRashiRef],
+        resolve: (k) => k.enemyRashis,
+        description: "Rāśis ruled by a cautionPlanets graha.",
+      }),
+      recommendConsultation: t.exposeBoolean("recommendConsultation", {
+        description:
+          "True when the running Mahādaśā lord's own functional nature for this Lagna is ENEMY " +
+          "— a gemstone match isn't the right remedy here, so callers should steer the shopper " +
+          "to an astrologer consultation instead of the crystal matching from favorablePlanets.",
       }),
       houses: t.field({
         type: [KundaliBhavaRef],
@@ -125,8 +173,10 @@ export function registerKundaliModule() {
     kundaliRecommendation: t.field({
       type: KundaliRecommendationRef,
       description:
-        "Compute a birth chart and its current Mahādaśā, and work out which grahas (and their " +
-        "gemstones) are astrologically favorable vs. ones to approach with caution.",
+        "Compute a birth chart and its current Mahādaśā, work out which grahas (and their " +
+        "gemstones) are functionally benefic for the Lagna vs. functionally malefic, and flag " +
+        "when the Mahādaśā lord itself is functionally malefic — in which case an astrologer " +
+        "consultation is recommended over a gemstone match.",
       args: {
         date: t.arg.string({ required: true, description: "Birth date, yyyy-mm-dd." }),
         time: t.arg.string({

@@ -21,6 +21,7 @@ const STATIC_ROUTES: { path: string; changefreq: SitemapEntry["changefreq"]; pri
   { path: "/about", changefreq: "monthly", priority: 0.6 },
   { path: "/shop", changefreq: "daily", priority: 0.9 },
   { path: "/consultancy", changefreq: "monthly", priority: 0.8 },
+  { path: "/gemstone-calculator", changefreq: "monthly", priority: 0.7 },
   { path: "/testimonials", changefreq: "monthly", priority: 0.5 },
   { path: "/contact", changefreq: "yearly", priority: 0.4 },
 ];

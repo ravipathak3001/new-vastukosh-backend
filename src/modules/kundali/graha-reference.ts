@@ -29,8 +29,15 @@ export function rashiLord(rashi: number): GrahaName {
   return lord;
 }
 
+/** Rāśis a graha rules. Rāhu/Ketu rule none — they're shadow points, not physical grahas. */
+export function rashisRuledBy(graha: GrahaName): number[] {
+  return Object.entries(RASHI_LORDS)
+    .filter(([, lord]) => lord === graha)
+    .map(([rashi]) => Number(rashi));
+}
+
 type NaturalTier = "friend" | "neutral" | "enemy";
-type ClassicalGraha = "Sun" | "Moon" | "Mars" | "Mercury" | "Jupiter" | "Venus" | "Saturn";
+export type ClassicalGraha = "Sun" | "Moon" | "Mars" | "Mercury" | "Jupiter" | "Venus" | "Saturn";
 
 /**
  * Naisargika (natural) friendship, from Bṛhat Parāśara Horā Śāstra — fixed
@@ -68,6 +75,61 @@ export function naturalRelation(reference: GrahaName, target: GrahaName): Natura
   if (row.friends.includes(t)) return "friend";
   if (row.enemies.includes(t)) return "enemy";
   return "neutral";
+}
+
+export type FunctionalNature = "FRIEND" | "NEUTRAL" | "ENEMY";
+
+const TRIKONA_HOUSES: ReadonlySet<number> = new Set([1, 5, 9]);
+const DUSTHANA_HOUSES: ReadonlySet<number> = new Set([6, 8, 12]);
+
+/** House (1–12, counted from the lagna) that `rashi` falls in, for a chart whose lagna sits in `lagnaRashi`. */
+function houseOfRashi(lagnaRashi: number, rashi: number): number {
+  return ((rashi - lagnaRashi + 12) % 12) + 1;
+}
+
+/**
+ * Combines both directions of the (asymmetric) Naisargika table into one verdict — either
+ * side regarding the other as an enemy is decisive, which is how popular functional-nature
+ * reasoning treats "natural enemies" even though BPHS itself is one-directional.
+ */
+function symmetricNaturalRelation(a: ClassicalGraha, b: ClassicalGraha): NaturalTier {
+  const ab = naturalRelation(a, b);
+  const ba = naturalRelation(b, a);
+  if (ab === "enemy" || ba === "enemy") return "enemy";
+  if (ab === "friend" || ba === "friend") return "friend";
+  return "neutral";
+}
+
+/**
+ * Functional benefic/malefic/neutral nature of `graha` for a chart with this `lagnaRashi` —
+ * the fixed, ascendant-only system used for gemstone recommendations (distinct from Pañchadhā
+ * Maitri, which is chart-placement-dependent). Rules, in priority order:
+ *  1. The Lagna (1st house) lord is always FRIEND, even if it also owns a dusthana.
+ *  2. Otherwise, owning any dusthana house (6th/8th/12th) makes it ENEMY.
+ *  3. Otherwise, owning a trikona house (5th/9th) makes it FRIEND.
+ *  4. Otherwise (only kendra/upachaya/maraka houses, or none at all) fall back to the
+ *     symmetric natural relationship with the Lagna lord.
+ * Rāhu/Ketu own no house — use `rahuKetuFunctionalNature` for them instead.
+ */
+export function functionalNature(graha: ClassicalGraha, lagnaRashi: number): FunctionalNature {
+  const lagnaLord = rashiLord(lagnaRashi);
+  if (graha === lagnaLord) return "FRIEND";
+
+  const ownedHouses = rashisRuledBy(graha).map((rashi) => houseOfRashi(lagnaRashi, rashi));
+  if (ownedHouses.some((h) => DUSTHANA_HOUSES.has(h))) return "ENEMY";
+  if (ownedHouses.some((h) => TRIKONA_HOUSES.has(h))) return "FRIEND";
+
+  const tier = symmetricNaturalRelation(classical(lagnaLord), graha);
+  return tier === "friend" ? "FRIEND" : tier === "enemy" ? "ENEMY" : "NEUTRAL";
+}
+
+/**
+ * Rāhu/Ketu rule no house of their own, so they inherit the functional nature of whichever
+ * graha rules the rāśi they occupy in this specific chart (`occupiedRashi`) — chart-specific,
+ * unlike the fixed per-ascendant nature of the seven classical grahas.
+ */
+export function rahuKetuFunctionalNature(occupiedRashi: number, lagnaRashi: number): FunctionalNature {
+  return functionalNature(classical(rashiLord(occupiedRashi)), lagnaRashi);
 }
 
 /** Navaratna gemstone conventionally associated with each graha. */
