@@ -26,15 +26,26 @@ const QUERY = `
       moonSign { rashi rashiName { en } lord }
       nakshatra { name { en } pada }
       currentMahadasha { lord lordName { en } start end antardashaLord antardashaStart antardashaEnd }
-      planetRelations { planet planetName { en } gemstone { en hi } lagnaFunctionalNature relationToLagnaLord relationToMahadashaLord }
+      planetRelations {
+        planet planetName { en } gemstone { en hi } lagnaFunctionalNature relationToLagnaLord relationToMahadashaLord
+        dignity strength isCombust isRetrograde isYogakaraka isVargottama
+      }
       favorablePlanets { planet }
       cautionPlanets { planet }
       neutralPlanets { planet }
       friendlyRashis { rashi rashiName { en } }
       enemyRashis { rashi rashiName { en } }
       recommendConsultation
+      gemstoneRecommendation {
+        planet planetName { en } gemstone { en hi } tier strength dignity isCombust isRetrograde isYogakaraka isVargottama
+      }
       houses { house rashi rashiName { en } grahas }
       chandraHouses { house rashi rashiName { en } grahas }
+      divisionalCharts {
+        code
+        label { en hi }
+        houses { house rashi rashiName { en } grahas }
+      }
     }
   }
 `;
@@ -152,6 +163,33 @@ describe("kundaliRecommendation query", () => {
     }
   });
 
+  it("applies the same 180°/6-rashi ascendant correction to every divisionalChart, not just D1", async () => {
+    // 1949-12-12 07:03, Jaipur — cross-checked against buildDivisionalChart() called directly
+    // with the corrected ascendant (see kundali.service.ts's `correctedAscendant`): the library's
+    // own k.vargas are driven by its buggy ascendant and come out shifted by exactly 6 rashis,
+    // same as k.ascendant itself, for every varga.
+    const JAIPUR = { date: "1949-12-12", time: "07:03", lat: 26.9124, lng: 75.7873 };
+    const res = await gql(QUERY, JAIPUR);
+    const r = res.data.kundaliRecommendation;
+
+    expect(r.divisionalCharts.map((c: { code: string }) => c.code)).toEqual(["D9", "D10", "D7", "D12"]);
+
+    const lagnaRashiOf = (code: string) =>
+      r.divisionalCharts
+        .find((c: { code: string }) => c.code === code)
+        .houses.find((h: { house: number }) => h.house === 1).rashi;
+    expect(lagnaRashiOf("D9")).toBe(11);
+    expect(lagnaRashiOf("D10")).toBe(12);
+    expect(lagnaRashiOf("D7")).toBe(7);
+    expect(lagnaRashiOf("D12")).toBe(5);
+
+    for (const chart of r.divisionalCharts) {
+      expect(chart.houses).toHaveLength(12);
+      const allPlacedGrahas = chart.houses.flatMap((h: { grahas: string[] }) => h.grahas);
+      expect(allPlacedGrahas.sort()).toEqual([...GRAHA_ORDER].sort());
+    }
+  });
+
   it("keeps favorablePlanets and cautionPlanets disjoint, driven by lagnaFunctionalNature", async () => {
     const res = await gql(QUERY, BIRTH);
     const r = res.data.kundaliRecommendation;
@@ -223,6 +261,65 @@ describe("kundaliRecommendation query", () => {
     // The running Mahādaśā lord (Saturn) is itself functionally malefic here, so a consultation
     // is recommended instead of a gemstone match — the exact bug reported for this chart.
     expect(r.recommendConsultation).toBe(true);
+
+    // recommendConsultation flags the Mahādaśā lord specifically — it doesn't block a separate,
+    // narrower gemstoneRecommendation for a different graha (here the weak Lagna lord, Mars:
+    // dignity ENEMY_SIGN since natal Mars sits in Kanya, ruled by Mercury, Mars's natural enemy).
+    expect(r.gemstoneRecommendation).not.toBeNull();
+    expect(r.gemstoneRecommendation.planet).toBe("Mars");
+    expect(r.gemstoneRecommendation.tier).toBe("LAGNA_LORD");
+    expect(r.gemstoneRecommendation.strength).not.toBe("STRONG");
+  });
+
+  it("computes dignity/strength consistently: EXALTED/OWN_SIGN → STRONG, DEBILITATED/ENEMY_SIGN → WEAK, unless combust", async () => {
+    const res = await gql(QUERY, BIRTH);
+    const r = res.data.kundaliRecommendation;
+    for (const p of r.planetRelations) {
+      if (p.dignity === "EXALTED" || p.dignity === "OWN_SIGN") {
+        expect(p.strength).toBe(p.isCombust ? "MODERATE" : "STRONG");
+      }
+      if (p.dignity === "DEBILITATED" || p.dignity === "ENEMY_SIGN") {
+        expect(p.strength).toBe("WEAK");
+      }
+      // Sun/Rāhu/Ketu can never be combust (Sun can't be combust with itself; Rāhu/Ketu are shadow points).
+      if (p.planet === "Sun" || p.planet === "Rahu" || p.planet === "Ketu") {
+        expect(p.isCombust).toBe(false);
+      }
+      // Sun/Moon are never retrograde; Rāhu/Ketu always are.
+      if (p.planet === "Sun" || p.planet === "Moon") expect(p.isRetrograde).toBe(false);
+      if (p.planet === "Rahu" || p.planet === "Ketu") expect(p.isRetrograde).toBe(true);
+    }
+  });
+
+  it("only ever recommends a graha that is functionally FRIEND and not already STRONG", async () => {
+    const cases = [
+      BIRTH,
+      { date: "1949-12-12", time: "07:03", lat: 26.9124, lng: 75.7873 },
+      { date: "2000-11-23", time: "03:45", lat: 13.0827, lng: 80.2707 },
+    ];
+    for (const c of cases) {
+      const res = await gql(QUERY, c);
+      const g = res.data.kundaliRecommendation.gemstoneRecommendation;
+      if (g === null) continue;
+      expect(g.strength).not.toBe("STRONG");
+      const favorable = new Set(
+        res.data.kundaliRecommendation.favorablePlanets.map((p: { planet: string }) => p.planet),
+      );
+      expect(favorable.has(g.planet)).toBe(true);
+    }
+  });
+
+  it("detects Saturn as Yogakaraka for a Tula (Libra) Lagna — the textbook case", async () => {
+    // 2000-11-23 03:45, Chennai — Lagna Tula (Venus); Saturn rules 4th (Makara, kendra) and
+    // 5th (Kumbha, trikona) from Tula, the classical Yogakaraka combination for Tula/Vrishabha.
+    const CHENNAI = { date: "2000-11-23", time: "03:45", lat: 13.0827, lng: 80.2707 };
+    const res = await gql(QUERY, CHENNAI);
+    const r = res.data.kundaliRecommendation;
+    expect(r.ascendant.rashiName.en).toBe("Tula");
+    const saturn = r.planetRelations.find((p: { planet: string }) => p.planet === "Saturn");
+    expect(saturn.isYogakaraka).toBe(true);
+    const others = r.planetRelations.filter((p: { planet: string }) => p.planet !== "Saturn");
+    for (const p of others) expect(p.isYogakaraka).toBe(false);
   });
 
   it("rejects a malformed birth date", async () => {

@@ -4,12 +4,16 @@ import {
   activeDashaChain,
   ascendantTropicalLongitude,
   rashiPlacement,
+  nakshatraPlacement,
   wholeSignHouses,
+  buildDivisionalChart,
   GRAHA_ORDER,
   GRAHA_NAMES,
   type Kundali,
   type GrahaName,
   type Bhava,
+  type Ascendant,
+  type VargaCode,
 } from "vedic-kundali";
 import { dateToJD, type AyanamsaSystem, type Name } from "vedic-panchanga";
 import { badInput } from "../../shared/errors.js";
@@ -21,8 +25,14 @@ import {
   rashisRuledBy,
   functionalNature,
   rahuKetuFunctionalNature,
+  dignityOf,
+  isCombust,
+  strengthOf,
+  isYogakaraka,
   type ClassicalGraha,
   type FunctionalNature,
+  type Dignity,
+  type Strength,
 } from "./graha-reference.js";
 
 /**
@@ -58,6 +68,15 @@ import {
  * shopper to an astrologer consultation instead of the crystal matching
  * below.
  *
+ * `gemstoneRecommendation` is the single best-reasoned candidate for "which
+ * one gemstone", via `pickGemstoneRecommendation`'s priority chain (Lagna
+ * lord → Yogakaraka → Mahādaśā lord → Antardaśā lord → any other favorable
+ * graha) — deliberately NOT "Mahādaśā/Antardaśā lord ⇒ its gemstone": a
+ * graha only qualifies if it's functionally FRIEND *and* not already STRONG
+ * (own sign/exalted, net of combustion). Dignity/strength/combustion/
+ * retrograde/Yogakaraka/Vargottama are computed per graha and exposed on
+ * every `PlanetMatchView` for this.
+ *
  * Unlike the `panchang` module, this does NOT memoize: panchang's cache key
  * space is small (most requests share "today + default location"), but a
  * kundali's key is unique per shopper's birth data — an unbounded in-process
@@ -70,6 +89,9 @@ const WALL_TIME = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 type NameLike = { iast: string; devanagari: string };
 const localized = (n: NameLike | Name): LocalizedString => ({ en: n.iast, hi: n.devanagari });
+
+/** For varga labels specifically: prefer the library's plain-English gloss ("Career") over the IAST transliteration ("Dasamsa") when it has one. */
+const localizedVargaLabel = (n: Name): LocalizedString => ({ en: n.english ?? n.iast, hi: n.devanagari });
 
 export type CompoundRelation =
   | "GREAT_FRIEND"
@@ -102,6 +124,43 @@ function compoundRelation(reference: GrahaName, target: GrahaName, houses: Bhava
   return temporal === "friend" ? "NEUTRAL" : "GREAT_ENEMY";
 }
 
+/**
+ * The priority chain a gemstone recommendation actually follows: never
+ * "Mahādaśā/Antardaśā lord ⇒ wear its gemstone" on its own — a graha only
+ * qualifies if it's functionally FRIEND for the Lagna *and* not already
+ * STRONG (an already-strong or functionally hostile graha isn't strengthened
+ * further just because it's running Dasha). Checked in order: Lagna lord,
+ * Yogakaraka, the running Mahādaśā lord, the running Antardaśā lord, then
+ * any other qualifying favorable graha. `null` if nothing qualifies.
+ */
+function pickGemstoneRecommendation(
+  planets: PlanetMatchView[],
+  lagnaLord: GrahaName,
+  mahadashaLord: GrahaName,
+  antardashaLord: GrahaName | null,
+): GemstoneRecommendationView | null {
+  const byPlanet = new Map(planets.map((p) => [p.planet, p]));
+  const qualifies = (p: PlanetMatchView | undefined): p is PlanetMatchView =>
+    !!p && p.lagnaFunctionalNature === "FRIEND" && p.strength !== "STRONG";
+
+  const lagnaLordP = byPlanet.get(lagnaLord);
+  if (qualifies(lagnaLordP)) return { ...lagnaLordP, tier: "LAGNA_LORD" };
+
+  const yogakarakaP = planets.find((p) => p.isYogakaraka && qualifies(p));
+  if (yogakarakaP) return { ...yogakarakaP, tier: "YOGAKARAKA" };
+
+  const mahaP = byPlanet.get(mahadashaLord);
+  if (qualifies(mahaP)) return { ...mahaP, tier: "MAHADASHA_LORD" };
+
+  const antarP = antardashaLord ? byPlanet.get(antardashaLord) : undefined;
+  if (qualifies(antarP)) return { ...antarP, tier: "ANTARDASHA_LORD" };
+
+  const otherP = planets.find((p) => qualifies(p));
+  if (otherP) return { ...otherP, tier: "OTHER_FRIEND" };
+
+  return null;
+}
+
 
 export type SignPlacementView = {
   rashi: number;
@@ -130,7 +189,29 @@ export type PlanetMatchView = {
   lagnaFunctionalNature: FunctionalNature;
   relationToLagnaLord: CompoundRelation;
   relationToMahadashaLord: CompoundRelation;
+  /** Sign-based dignity in the D1 chart — exaltation/own-sign/friend-neutral-enemy sign/debilitation. */
+  dignity: Dignity;
+  /** dignity + combustion collapsed into a three-tier read — what the gemstone selector reasons over. */
+  strength: Strength;
+  /** Within combustion orb of the Sun. Always false for Sun/Rāhu/Ketu. */
+  isCombust: boolean;
+  /** Apparent retrograde motion at birth. Always true for Rāhu/Ketu, always false for Sun/Moon. */
+  isRetrograde: boolean;
+  /** Rules both a kendra (4th/7th/10th) and a trikona (5th/9th) house from the Lagna — a Yogakaraka. */
+  isYogakaraka: boolean;
+  /** Same rāśi in D1 and D9 (Navāṃśa) — doubles the graha's strength classically. */
+  isVargottama: boolean;
 };
+
+/** Which step of the priority chain (Lagna lord → Yogakaraka → Mahādaśā lord → Antardaśā lord → other) selected the recommended graha. */
+export type GemstoneRecommendationTier =
+  | "LAGNA_LORD"
+  | "YOGAKARAKA"
+  | "MAHADASHA_LORD"
+  | "ANTARDASHA_LORD"
+  | "OTHER_FRIEND";
+
+export type GemstoneRecommendationView = PlanetMatchView & { tier: GemstoneRecommendationTier };
 
 export type BhavaView = {
   house: number;
@@ -142,6 +223,12 @@ export type BhavaView = {
 export type RashiView = {
   rashi: number;
   rashiName: LocalizedString;
+};
+
+export type DivisionalChartView = {
+  code: string;
+  label: LocalizedString;
+  houses: BhavaView[];
 };
 
 export type KundaliRecommendationView = {
@@ -160,10 +247,27 @@ export type KundaliRecommendationView = {
   enemyRashis: RashiView[];
   /** True when the running Mahādaśā lord is hostile (ENEMY/GREAT_ENEMY) to the Lagna lord. */
   recommendConsultation: boolean;
+  /**
+   * The single best-reasoned gemstone candidate, by the priority chain: Lagna
+   * lord → Yogakaraka → Mahādaśā lord → Antardaśā lord → any other favorable
+   * graha — each only qualifying if it's functionally FRIEND *and* not
+   * already STRONG (an already-strong or functionally hostile graha is never
+   * strengthened further just because it's running Dasha). `null` when no
+   * graha qualifies — the chart doesn't call for strengthening any one graha
+   * right now, and that should be said plainly rather than forcing a pick.
+   */
+  gemstoneRecommendation: GemstoneRecommendationView | null;
   /** D1 (Rāśi) whole-sign houses from the lagna — for a North Indian style chart. */
   houses: BhavaView[];
   /** Same D1 placements, houses renumbered from the Moon instead of the lagna — the Chandra Kuṇḍalī. */
   chandraHouses: BhavaView[];
+  /**
+   * A curated set of divisional (varga) charts beyond D1 — Navāṃśa (D9),
+   * Daśāṃśa (D10, career), Saptāṃśa (D7, children), Dvādaśāṃśa (D12,
+   * parents) — each in the same whole-sign `houses` shape as `houses`
+   * above, so the same chart-rendering component can show any of them.
+   */
+  divisionalCharts: DivisionalChartView[];
 };
 
 export type KundaliArgs = {
@@ -251,6 +355,32 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   };
   const correctedHouses: Bhava[] = wholeSignHouses(ascendant.rashi, (g) => k.grahas[g].rashi);
 
+  /**
+   * The 180° ascendant bug above propagates into every `k.vargas[code]`
+   * too — `buildDivisionalChart` is what computes them internally, driven
+   * by the library's own (buggy) ascendant. Confirmed empirically across
+   * D1/D7/D9/D10/D12 for a real chart: every one comes out shifted by
+   * exactly the same 6 rashis as `k.ascendant` itself. Rather than lean on
+   * that pattern holding, we just rebuild each curated varga directly from
+   * the already-corrected ascendant, exactly like `correctedHouses` above
+   * does for D1 — `k.grahas` itself is unaffected by the bug, so it's
+   * reused as-is.
+   */
+  const correctedAscendant: Ascendant = {
+    ...ascendantPlacement,
+    longitude: ascendantSidereal,
+    nakshatra: nakshatraPlacement(ascendantSidereal),
+  };
+  const CURATED_VARGAS: VargaCode[] = ["D9", "D10", "D7", "D12"];
+  const divisionalCharts: DivisionalChartView[] = CURATED_VARGAS.map((code) => {
+    const varga = buildDivisionalChart(code, correctedAscendant, k.grahas);
+    return {
+      code: varga.code,
+      label: localizedVargaLabel(varga.label),
+      houses: (varga.houses ?? []).map(toBhavaView),
+    };
+  });
+
   const lagnaLord = rashiLord(ascendant.rashi);
   const mahadashaLord = maha.lord;
 
@@ -260,15 +390,27 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     return functionalNature(g as ClassicalGraha, ascendant.rashi);
   };
 
-  const planetRelations: PlanetMatchView[] = GRAHA_ORDER.map((g) => ({
-    planet: g,
-    planetName: localized(GRAHA_NAMES[g]),
-    gemstone: GEMSTONE_BY_GRAHA[g],
-    lagnaFunctionalNature: lagnaFunctionalNatureOf(g),
-    relationToLagnaLord: g === lagnaLord ? "SELF" : compoundRelation(lagnaLord, g, correctedHouses),
-    relationToMahadashaLord:
-      g === mahadashaLord ? "SELF" : compoundRelation(mahadashaLord, g, correctedHouses),
-  }));
+  const d9 = k.vargas.D9;
+
+  const planetRelations: PlanetMatchView[] = GRAHA_ORDER.map((g) => {
+    const dignity = dignityOf(g, k.grahas[g].rashi);
+    const combust = isCombust(k.grahas[g].longitude, k.grahas.Sun.longitude, g);
+    return {
+      planet: g,
+      planetName: localized(GRAHA_NAMES[g]),
+      gemstone: GEMSTONE_BY_GRAHA[g],
+      lagnaFunctionalNature: lagnaFunctionalNatureOf(g),
+      relationToLagnaLord: g === lagnaLord ? "SELF" : compoundRelation(lagnaLord, g, correctedHouses),
+      relationToMahadashaLord:
+        g === mahadashaLord ? "SELF" : compoundRelation(mahadashaLord, g, correctedHouses),
+      dignity,
+      strength: strengthOf(dignity, combust),
+      isCombust: combust,
+      isRetrograde: k.grahas[g].isRetrograde,
+      isYogakaraka: g !== "Rahu" && g !== "Ketu" && isYogakaraka(g as ClassicalGraha, ascendant.rashi),
+      isVargottama: d9.positions[g] === k.grahas[g].rashi,
+    };
+  });
 
   const favorablePlanets = planetRelations.filter((p) => p.lagnaFunctionalNature === "FRIEND");
   const cautionPlanets = planetRelations.filter((p) => p.lagnaFunctionalNature === "ENEMY");
@@ -290,6 +432,13 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
   };
   const friendlyRashis = rashisFor(favorablePlanets);
   const enemyRashis = rashisFor(cautionPlanets);
+
+  const gemstoneRecommendation = pickGemstoneRecommendation(
+    planetRelations,
+    lagnaLord,
+    mahadashaLord,
+    antar?.lord ?? null,
+  );
 
   return {
     ascendant,
@@ -318,8 +467,10 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     friendlyRashis,
     enemyRashis,
     recommendConsultation,
+    gemstoneRecommendation,
     houses: correctedHouses.map(toBhavaView),
     chandraHouses: k.chandraKundaliHouses.map(toBhavaView),
+    divisionalCharts,
   };
 }
 

@@ -5,8 +5,10 @@ import {
   type SignPlacementView,
   type MahadashaView,
   type PlanetMatchView,
+  type GemstoneRecommendationView,
   type BhavaView,
   type RashiView,
+  type DivisionalChartView,
   type KundaliRecommendationView,
 } from "./kundali.service.js";
 
@@ -30,6 +32,23 @@ const FunctionalNatureEnum = builder.enumType("PlanetFunctionalNature", {
     "lordship: trikona lords are friends, dusthana lords are enemies, the Lagna lord is always a " +
     "friend, with natural relationship to the Lagna lord as a tie-break otherwise) — the system " +
     "gemstone recommendations use. Drives favorablePlanets/cautionPlanets/neutralPlanets.",
+});
+
+const DignityEnum = builder.enumType("PlanetDignity", {
+  values: ["EXALTED", "OWN_SIGN", "FRIEND_SIGN", "NEUTRAL_SIGN", "ENEMY_SIGN", "DEBILITATED"] as const,
+  description:
+    "Sign-based dignity in the D1 chart: exaltation/debilitation sign (whole-sign, not degree-" +
+    "gated), own sign, or friend/neutral/enemy sign by natural relationship with the sign's lord.",
+});
+
+const StrengthEnum = builder.enumType("PlanetStrength", {
+  values: ["STRONG", "MODERATE", "WEAK"] as const,
+  description: "Dignity collapsed to three tiers, one notch weaker if combust — what gemstoneRecommendation reasons over.",
+});
+
+const GemstoneRecommendationTierEnum = builder.enumType("GemstoneRecommendationTier", {
+  values: ["LAGNA_LORD", "YOGAKARAKA", "MAHADASHA_LORD", "ANTARDASHA_LORD", "OTHER_FRIEND"] as const,
+  description: "Which step of the priority chain selected gemstoneRecommendation's graha.",
 });
 
 const SignPlacementRef = builder.objectRef<SignPlacementView>("KundaliSignPlacement").implement({
@@ -83,8 +102,47 @@ const PlanetMatchRef = builder.objectRef<PlanetMatchView>("KundaliPlanetMatch").
       type: CompoundRelationEnum,
       resolve: (p) => p.relationToMahadashaLord,
     }),
+    dignity: t.field({ type: DignityEnum, resolve: (p) => p.dignity }),
+    strength: t.field({ type: StrengthEnum, resolve: (p) => p.strength }),
+    isCombust: t.exposeBoolean("isCombust"),
+    isRetrograde: t.exposeBoolean("isRetrograde"),
+    isYogakaraka: t.exposeBoolean("isYogakaraka"),
+    isVargottama: t.exposeBoolean("isVargottama", {
+      description: "Same rāśi in D1 and D9 (Navāṃśa) — classically doubles the graha's strength.",
+    }),
   }),
 });
+
+const GemstoneRecommendationRef = builder
+  .objectRef<GemstoneRecommendationView>("KundaliGemstoneRecommendation")
+  .implement({
+    description:
+      "The single best-reasoned gemstone candidate, from a priority chain (Lagna lord → " +
+      "Yogakaraka → Mahādaśā lord → Antardaśā lord → any other favorable graha) where a graha " +
+      "only qualifies if it's functionally FRIEND and not already STRONG — never a bare " +
+      "\"Mahādaśā/Antardaśā lord ⇒ its gemstone\".",
+    fields: (t) => ({
+      planet: t.exposeString("planet"),
+      planetName: t.field({ type: LocalizedStringRef, resolve: (p) => p.planetName }),
+      gemstone: t.field({ type: LocalizedStringRef, resolve: (p) => p.gemstone }),
+      lagnaFunctionalNature: t.field({
+        type: FunctionalNatureEnum,
+        resolve: (p) => p.lagnaFunctionalNature,
+      }),
+      relationToLagnaLord: t.field({ type: CompoundRelationEnum, resolve: (p) => p.relationToLagnaLord }),
+      relationToMahadashaLord: t.field({
+        type: CompoundRelationEnum,
+        resolve: (p) => p.relationToMahadashaLord,
+      }),
+      dignity: t.field({ type: DignityEnum, resolve: (p) => p.dignity }),
+      strength: t.field({ type: StrengthEnum, resolve: (p) => p.strength }),
+      isCombust: t.exposeBoolean("isCombust"),
+      isRetrograde: t.exposeBoolean("isRetrograde"),
+      isYogakaraka: t.exposeBoolean("isYogakaraka"),
+      isVargottama: t.exposeBoolean("isVargottama"),
+      tier: t.field({ type: GemstoneRecommendationTierEnum, resolve: (p) => p.tier }),
+    }),
+  });
 
 const KundaliBhavaRef = builder.objectRef<BhavaView>("KundaliBhava").implement({
   description: "One house (bhāva) of the D1 whole-sign chart, from the lagna.",
@@ -100,6 +158,15 @@ const KundaliRashiRef = builder.objectRef<RashiView>("KundaliRashi").implement({
   fields: (t) => ({
     rashi: t.exposeInt("rashi", { description: "1 (Mesha) – 12 (Meena)." }),
     rashiName: t.field({ type: LocalizedStringRef, resolve: (r) => r.rashiName }),
+  }),
+});
+
+const KundaliDivisionalChartRef = builder.objectRef<DivisionalChartView>("KundaliDivisionalChart").implement({
+  description: "One divisional (varga) chart beyond D1, in the same whole-sign houses shape as `houses`.",
+  fields: (t) => ({
+    code: t.exposeString("code", { description: 'Varga code, e.g. "D9".' }),
+    label: t.field({ type: LocalizedStringRef, resolve: (v) => v.label }),
+    houses: t.field({ type: [KundaliBhavaRef], resolve: (v) => v.houses }),
   }),
 });
 
@@ -155,6 +222,14 @@ const KundaliRecommendationRef = builder
           "— a gemstone match isn't the right remedy here, so callers should steer the shopper " +
           "to an astrologer consultation instead of the crystal matching from favorablePlanets.",
       }),
+      gemstoneRecommendation: t.field({
+        type: GemstoneRecommendationRef,
+        nullable: true,
+        resolve: (k) => k.gemstoneRecommendation,
+        description:
+          "The single best-reasoned gemstone candidate (see KundaliGemstoneRecommendation), or " +
+          "null when no graha currently qualifies — say so plainly rather than forcing a pick.",
+      }),
       houses: t.field({
         type: [KundaliBhavaRef],
         resolve: (k) => k.houses,
@@ -164,6 +239,14 @@ const KundaliRecommendationRef = builder
         type: [KundaliBhavaRef],
         resolve: (k) => k.chandraHouses,
         description: "Same D1 placements, houses renumbered from the Moon instead of the lagna — the Chandra Kuṇḍalī.",
+      }),
+      divisionalCharts: t.field({
+        type: [KundaliDivisionalChartRef],
+        resolve: (k) => k.divisionalCharts,
+        description:
+          "A curated set of divisional (varga) charts beyond D1: Navāṃśa (D9), Daśāṃśa (D10, " +
+          "career), Saptāṃśa (D7, children), Dvādaśāṃśa (D12, parents) — for a chart-viewer to " +
+          "switch between alongside the main D1 `houses`.",
       }),
     }),
   });

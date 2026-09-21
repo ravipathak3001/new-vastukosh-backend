@@ -83,7 +83,7 @@ const TRIKONA_HOUSES: ReadonlySet<number> = new Set([1, 5, 9]);
 const DUSTHANA_HOUSES: ReadonlySet<number> = new Set([6, 8, 12]);
 
 /** House (1–12, counted from the lagna) that `rashi` falls in, for a chart whose lagna sits in `lagnaRashi`. */
-function houseOfRashi(lagnaRashi: number, rashi: number): number {
+export function houseOfRashi(lagnaRashi: number, rashi: number): number {
   return ((rashi - lagnaRashi + 12) % 12) + 1;
 }
 
@@ -130,6 +130,94 @@ export function functionalNature(graha: ClassicalGraha, lagnaRashi: number): Fun
  */
 export function rahuKetuFunctionalNature(occupiedRashi: number, lagnaRashi: number): FunctionalNature {
   return functionalNature(classical(rashiLord(occupiedRashi)), lagnaRashi);
+}
+
+/**
+ * Sign-based dignity — whole-sign exaltation/debilitation (the sign counts as
+ * exalted/debilitated regardless of exact degree; the degree only marks peak
+ * strength within it, a distinction that doesn't matter for this tiering),
+ * own sign, or friend/neutral/enemy sign (via `naturalRelation` with the
+ * sign's own lord). Rāhu/Ketu own no sign and have no agreed exaltation
+ * point across traditions, so they can only ever land FRIEND/NEUTRAL/ENEMY_SIGN
+ * here, via their `classical()` proxy.
+ */
+export type Dignity = "EXALTED" | "OWN_SIGN" | "FRIEND_SIGN" | "NEUTRAL_SIGN" | "ENEMY_SIGN" | "DEBILITATED";
+
+const EXALTATION_RASHI: Record<ClassicalGraha, number> = {
+  Sun: 1,
+  Moon: 2,
+  Mars: 10,
+  Mercury: 6,
+  Jupiter: 4,
+  Venus: 12,
+  Saturn: 7,
+};
+
+export function dignityOf(graha: GrahaName, rashi: number): Dignity {
+  if (graha !== "Rahu" && graha !== "Ketu") {
+    const exaltRashi = EXALTATION_RASHI[graha];
+    if (rashi === exaltRashi) return "EXALTED";
+    if (rashi === ((exaltRashi - 1 + 6) % 12) + 1) return "DEBILITATED";
+  }
+  if (rashisRuledBy(graha).includes(rashi)) return "OWN_SIGN";
+
+  const tier = naturalRelation(graha, rashiLord(rashi));
+  return tier === "friend" ? "FRIEND_SIGN" : tier === "enemy" ? "ENEMY_SIGN" : "NEUTRAL_SIGN";
+}
+
+/**
+ * Combustion (Asta) — within a planet-specific orb of the Sun's longitude,
+ * classically weakening. The Sun itself is never combust; Rāhu/Ketu are
+ * shadow points with no physical proximity to combust from.
+ */
+const COMBUSTION_ORB_DEGREES: Record<ClassicalGraha, number> = {
+  Sun: 0,
+  Moon: 12,
+  Mars: 17,
+  Mercury: 14,
+  Jupiter: 11,
+  Venus: 10,
+  Saturn: 15,
+};
+
+export function isCombust(grahaLongitude: number, sunLongitude: number, graha: GrahaName): boolean {
+  if (graha === "Sun" || graha === "Rahu" || graha === "Ketu") return false;
+  const diff = Math.abs(grahaLongitude - sunLongitude) % 360;
+  const angularDistance = Math.min(diff, 360 - diff);
+  return angularDistance <= COMBUSTION_ORB_DEGREES[graha];
+}
+
+export type Strength = "STRONG" | "MODERATE" | "WEAK";
+
+/** Collapses dignity (+ combustion, which knocks one tier off) into the three-tier tiering the gemstone selector reasons over. */
+export function strengthOf(dignity: Dignity, combust: boolean): Strength {
+  const base: Strength =
+    dignity === "EXALTED" || dignity === "OWN_SIGN"
+      ? "STRONG"
+      : dignity === "FRIEND_SIGN" || dignity === "NEUTRAL_SIGN"
+        ? "MODERATE"
+        : "WEAK";
+  if (!combust) return base;
+  return base === "STRONG" ? "MODERATE" : "WEAK";
+}
+
+const KENDRA_HOUSES_EXCL_LAGNA: ReadonlySet<number> = new Set([4, 7, 10]);
+const TRIKONA_HOUSES_EXCL_LAGNA: ReadonlySet<number> = new Set([5, 9]);
+
+/**
+ * Yogakaraka — a graha that rules both a kendra (4th/7th/10th) and a trikona
+ * (5th/9th) house from the Lagna via its two sign-lordships (e.g. Saturn for
+ * Taurus/Libra, Mars for Cancer/Leo, Venus for Capricorn/Aquarius) — one of
+ * the strongest benefic combinations in Parāśari astrology. The Lagna lord
+ * itself is excluded (1st house is trivially both kendra and trikona; that
+ * status is "Lagna lord", handled separately, not this).
+ */
+export function isYogakaraka(graha: ClassicalGraha, lagnaRashi: number): boolean {
+  const ownedHouses = rashisRuledBy(graha).map((rashi) => houseOfRashi(lagnaRashi, rashi));
+  return (
+    ownedHouses.some((h) => KENDRA_HOUSES_EXCL_LAGNA.has(h)) &&
+    ownedHouses.some((h) => TRIKONA_HOUSES_EXCL_LAGNA.has(h))
+  );
 }
 
 /** Navaratna gemstone conventionally associated with each graha. */

@@ -434,6 +434,17 @@ input FaqInput {
 }
 
 """
+Which step of the priority chain selected gemstoneRecommendation's graha.
+"""
+enum GemstoneRecommendationTier {
+  ANTARDASHA_LORD
+  LAGNA_LORD
+  MAHADASHA_LORD
+  OTHER_FRIEND
+  YOGAKARAKA
+}
+
+"""
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
 scalar JSON
@@ -458,6 +469,35 @@ type KundaliBhava {
   rashiName: LocalizedString
 }
 
+"""
+One divisional (varga) chart beyond D1, in the same whole-sign houses shape as `houses`.
+"""
+type KundaliDivisionalChart {
+  """Varga code, e.g. "D9"."""
+  code: String
+  houses: [KundaliBhava!]
+  label: LocalizedString
+}
+
+"""
+The single best-reasoned gemstone candidate, from a priority chain (Lagna lord → Yogakaraka → Mahādaśā lord → Antardaśā lord → any other favorable graha) where a graha only qualifies if it's functionally FRIEND and not already STRONG — never a bare "Mahādaśā/Antardaśā lord ⇒ its gemstone".
+"""
+type KundaliGemstoneRecommendation {
+  dignity: PlanetDignity
+  gemstone: LocalizedString
+  isCombust: Boolean
+  isRetrograde: Boolean
+  isVargottama: Boolean
+  isYogakaraka: Boolean
+  lagnaFunctionalNature: PlanetFunctionalNature
+  planet: String
+  planetName: LocalizedString
+  relationToLagnaLord: PlanetRelation
+  relationToMahadashaLord: PlanetRelation
+  strength: PlanetStrength
+  tier: GemstoneRecommendationTier
+}
+
 """The Vimśottarī Mahādaśā (and nested Antardaśā) running as of now."""
 type KundaliMahadasha {
   antardashaEnd: DateTime
@@ -478,12 +518,22 @@ type KundaliNakshatra {
 }
 
 type KundaliPlanetMatch {
+  dignity: PlanetDignity
   gemstone: LocalizedString
+  isCombust: Boolean
+  isRetrograde: Boolean
+
+  """
+  Same rāśi in D1 and D9 (Navāṃśa) — classically doubles the graha's strength.
+  """
+  isVargottama: Boolean
+  isYogakaraka: Boolean
   lagnaFunctionalNature: PlanetFunctionalNature
   planet: String
   planetName: LocalizedString
   relationToLagnaLord: PlanetRelation
   relationToMahadashaLord: PlanetRelation
+  strength: PlanetStrength
 }
 
 type KundaliRashi {
@@ -507,6 +557,11 @@ type KundaliRecommendation {
   chandraHouses: [KundaliBhava!]
   currentMahadasha: KundaliMahadasha
 
+  """
+  A curated set of divisional (varga) charts beyond D1: Navāṃśa (D9), Daśāṃśa (D10, career), Saptāṃśa (D7, children), Dvādaśāṃśa (D12, parents) — for a chart-viewer to switch between alongside the main D1 `houses`.
+  """
+  divisionalCharts: [KundaliDivisionalChart!]
+
   """Rāśis ruled by a cautionPlanets graha."""
   enemyRashis: [KundaliRashi!]
 
@@ -517,6 +572,11 @@ type KundaliRecommendation {
   Rāśis ruled by a favorablePlanets graha, for matching products tagged by rashi as well as by graha. Empty entries are possible if every favorable graha is Rāhu/Ketu, which rule none.
   """
   friendlyRashis: [KundaliRashi!]
+
+  """
+  The single best-reasoned gemstone candidate (see KundaliGemstoneRecommendation), or null when no graha currently qualifies — say so plainly rather than forcing a pick.
+  """
+  gemstoneRecommendation: KundaliGemstoneRecommendation
 
   """
   The D1 (Rāśi) chart's 12 whole-sign houses from the lagna, for rendering a chart — e.g. North Indian style.
@@ -954,6 +1014,18 @@ type PlaceOrderResult {
 }
 
 """
+Sign-based dignity in the D1 chart: exaltation/debilitation sign (whole-sign, not degree-gated), own sign, or friend/neutral/enemy sign by natural relationship with the sign's lord.
+"""
+enum PlanetDignity {
+  DEBILITATED
+  ENEMY_SIGN
+  EXALTED
+  FRIEND_SIGN
+  NEUTRAL_SIGN
+  OWN_SIGN
+}
+
+"""
 Functional benefic/malefic/neutral nature for this Lagna, fixed per ascendant sign (house lordship: trikona lords are friends, dusthana lords are enemies, the Lagna lord is always a friend, with natural relationship to the Lagna lord as a tie-break otherwise) — the system gemstone recommendations use. Drives favorablePlanets/cautionPlanets/neutralPlanets.
 """
 enum PlanetFunctionalNature {
@@ -972,6 +1044,15 @@ enum PlanetRelation {
   GREAT_FRIEND
   NEUTRAL
   SELF
+}
+
+"""
+Dignity collapsed to three tiers, one notch weaker if combust — what gemstoneRecommendation reasons over.
+"""
+enum PlanetStrength {
+  MODERATE
+  STRONG
+  WEAK
 }
 
 type Product {
