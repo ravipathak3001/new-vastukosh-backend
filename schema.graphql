@@ -1086,6 +1086,8 @@ type Product {
 }
 
 enum ProductCategory {
+  bracelets
+  coins
   crystals
   idols
   malas

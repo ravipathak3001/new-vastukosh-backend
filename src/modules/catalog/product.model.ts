@@ -9,6 +9,8 @@ export const PRODUCT_CATEGORIES = [
   "malas",
   "vastukits",
   "idols",
+  "bracelets",
+  "coins",
 ] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 
