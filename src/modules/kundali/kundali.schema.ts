@@ -7,6 +7,7 @@ import {
   type PlanetMatchView,
   type GemstoneRecommendationView,
   type BhavaView,
+  type BraceletSegmentView,
   type RashiView,
   type DivisionalChartView,
   type KundaliRecommendationView,
@@ -154,6 +155,17 @@ const KundaliBhavaRef = builder.objectRef<BhavaView>("KundaliBhava").implement({
   }),
 });
 
+const KundaliBraceletSegmentRef = builder.objectRef<BraceletSegmentView>("KundaliBraceletSegment").implement({
+  description: "One block of beads in the combination bracelet: one house lord's gemstone and how many beads it gets.",
+  fields: (t) => ({
+    house: t.exposeInt("house", { description: "Which house's lord this block is for — 1, 9 or 5." }),
+    planet: t.exposeString("planet", { description: "The graha ruling that house for this Lagna." }),
+    planetName: t.field({ type: LocalizedStringRef, resolve: (b) => b.planetName }),
+    gemstone: t.field({ type: LocalizedStringRef, resolve: (b) => b.gemstone }),
+    beads: t.exposeInt("beads", { description: "Beads of this gemstone in the bracelet." }),
+  }),
+});
+
 const KundaliRashiRef = builder.objectRef<RashiView>("KundaliRashi").implement({
   fields: (t) => ({
     rashi: t.exposeInt("rashi", { description: "1 (Mesha) – 12 (Meena)." }),
@@ -229,6 +241,13 @@ const KundaliRecommendationRef = builder
         description:
           "The single best-reasoned gemstone candidate (see KundaliGemstoneRecommendation), or " +
           "null when no graha currently qualifies — say so plainly rather than forcing a pick.",
+      }),
+      braceletCombo: t.field({
+        type: [KundaliBraceletSegmentRef],
+        resolve: (k) => k.braceletCombo,
+        description:
+          "The combination bracelet as bead blocks in wearing order — 1st, 9th then 5th house lord's " +
+          "gemstone, 9 / 7 / 5 of 21 beads. Determined by the Lagna alone (12 possible combinations).",
       }),
       houses: t.field({
         type: [KundaliBhavaRef],

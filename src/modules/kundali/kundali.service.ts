@@ -225,6 +225,33 @@ export type RashiView = {
   rashiName: LocalizedString;
 };
 
+/**
+ * Every bracelet is strung with this many beads: a single-gem bracelet is all 21 of one gem, a
+ * combination splits them across the trikona lords below. The frontend keeps its own copy of this
+ * number for single bracelets (`BRACELET_BEADS` in `frontend/lib/bracelet/design.ts`).
+ */
+export const BRACELET_TOTAL_BEADS = 21;
+
+/**
+ * The combination bracelet: which houses' lords contribute, and how many of the 21 beads each gets
+ * — Lagna lord the most, then the 9th, then the 5th. Always three *different* grahas: the 1st, 5th
+ * and 9th signs share an element, and each element's three signs have three different lords.
+ */
+const BRACELET_COMBO_PLAN = [
+  { house: 1, beads: 9 },
+  { house: 9, beads: 7 },
+  { house: 5, beads: 5 },
+] as const;
+
+/** One block of beads in the combination bracelet — the gem of one house's lord and how many beads it gets. */
+export type BraceletSegmentView = {
+  house: number;
+  planet: GrahaName;
+  planetName: LocalizedString;
+  gemstone: LocalizedString;
+  beads: number;
+};
+
 export type DivisionalChartView = {
   code: string;
   label: LocalizedString;
@@ -257,6 +284,12 @@ export type KundaliRecommendationView = {
    * right now, and that should be said plainly rather than forcing a pick.
    */
   gemstoneRecommendation: GemstoneRecommendationView | null;
+  /**
+   * The combination bracelet's bead blocks, in wearing order (1st → 9th → 5th house lord),
+   * summing to `BRACELET_TOTAL_BEADS`. Fixed by the Lagna alone — independent of Mahādaśā and of
+   * `recommendConsultation`, which callers may still choose to gate the offer on.
+   */
+  braceletCombo: BraceletSegmentView[];
   /** D1 (Rāśi) whole-sign houses from the lagna — for a North Indian style chart. */
   houses: BhavaView[];
   /** Same D1 placements, houses renumbered from the Moon instead of the lagna — the Chandra Kuṇḍalī. */
@@ -440,6 +473,11 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     antar?.lord ?? null,
   );
 
+  const braceletCombo: BraceletSegmentView[] = BRACELET_COMBO_PLAN.map(({ house, beads }) => {
+    const planet = rashiLord(correctedHouses.find((b) => b.house === house)!.rashi);
+    return { house, planet, planetName: localized(GRAHA_NAMES[planet]), gemstone: GEMSTONE_BY_GRAHA[planet], beads };
+  });
+
   return {
     ascendant,
     moonSign: {
@@ -468,6 +506,7 @@ export function getKundaliRecommendation(args: KundaliArgs): KundaliRecommendati
     enemyRashis,
     recommendConsultation,
     gemstoneRecommendation,
+    braceletCombo,
     houses: correctedHouses.map(toBhavaView),
     chandraHouses: k.chandraKundaliHouses.map(toBhavaView),
     divisionalCharts,

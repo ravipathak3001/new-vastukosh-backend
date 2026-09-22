@@ -39,6 +39,7 @@ const QUERY = `
       gemstoneRecommendation {
         planet planetName { en } gemstone { en hi } tier strength dignity isCombust isRetrograde isYogakaraka isVargottama
       }
+      braceletCombo { house planet planetName { en } gemstone { en hi } beads }
       houses { house rashi rashiName { en } grahas }
       chandraHouses { house rashi rashiName { en } grahas }
       divisionalCharts {
@@ -320,6 +321,30 @@ describe("kundaliRecommendation query", () => {
     expect(saturn.isYogakaraka).toBe(true);
     const others = r.planetRelations.filter((p: { planet: string }) => p.planet !== "Saturn");
     for (const p of others) expect(p.isYogakaraka).toBe(false);
+  });
+
+  it("builds the combination bracelet from the 1st, 9th and 5th house lords — 9 / 7 / 5 of 21 beads", async () => {
+    const res = await gql(QUERY, BIRTH);
+    expect(res.errors).toBeUndefined();
+    const r = res.data.kundaliRecommendation;
+    const houseRashi = (n: number) => r.houses.find((h: { house: number }) => h.house === n).rashi;
+    const combo = r.braceletCombo as { house: number; planet: string; gemstone: { en: string }; beads: number }[];
+
+    expect(combo.map((b) => b.house)).toEqual([1, 9, 5]);
+    expect(combo.map((b) => b.beads)).toEqual([9, 7, 5]);
+    expect(combo.reduce((sum, b) => sum + b.beads, 0)).toBe(21);
+    expect(combo[0]!.planet).toBe(r.ascendant.lord);
+    for (const b of combo) expect(b.planet).toBe(rashiLord(houseRashi(b.house)));
+    for (const b of combo) expect(b.gemstone.en).toBeTruthy();
+  });
+
+  it("gives all 12 lagnas three different lords for the 1st, 9th and 5th houses", () => {
+    // The combination bracelet shows one gem block per lord, so a repeated lord would collapse two blocks into one.
+    const houseRashi = (lagna: number, house: number) => ((lagna - 1 + house - 1) % 12) + 1;
+    for (let lagna = 1; lagna <= 12; lagna++) {
+      const lords = [1, 9, 5].map((h) => rashiLord(houseRashi(lagna, h)));
+      expect(new Set(lords).size, `lagna ${lagna}: ${lords.join("/")}`).toBe(3);
+    }
   });
 
   it("rejects a malformed birth date", async () => {
