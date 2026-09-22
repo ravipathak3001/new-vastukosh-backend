@@ -9,6 +9,7 @@ import {
   resolveCartLines,
   type CartOwner,
 } from "../cart/cart.service.js";
+import { reserveStock, restockItems } from "../catalog/catalog.service.js";
 import { CartModel } from "../cart/cart.model.js";
 import { getPaymentProvider } from "../payment/payment.provider.js";
 import {
@@ -58,6 +59,9 @@ export async function advanceStatus(
   order.status = to;
   order.timeline.push({ status: to, at: new Date(), note });
   await order.save();
+  if (to === "cancelled" || to === "refunded") {
+    await restockItems(order.items.map((i) => ({ productSlug: i.productSlug, qty: i.qty })));
+  }
   return order;
 }
 
@@ -86,36 +90,45 @@ export async function placeOrder(
 
   const lines = await resolveCartLines(cart.items);
   if (lines.length === 0) throw badInput("None of the items in your cart are available");
+  await reserveStock(lines.map((l) => ({ productSlug: l.productSlug, qty: l.qty })));
   const totals = await computeTotals(lines, cart.promoCode || null);
 
   const provider = getPaymentProvider();
+  const stockLines = lines.map((l) => ({ productSlug: l.productSlug, qty: l.qty }));
 
-  const order = await OrderModel.create({
-    orderNo: generateOrderNo(),
-    userId: owner.userId ?? null,
-    email: input.email.toLowerCase().trim(),
-    items: lines,
-    subtotal: totals.subtotal,
-    discount: totals.discount,
-    shippingFee: totals.shipping,
-    total: totals.total,
-    promoCode: totals.promoCode ?? "",
-    shippingAddress: {
-      firstName: input.shippingAddress.firstName,
-      lastName: input.shippingAddress.lastName ?? "",
-      line1: input.shippingAddress.line1,
-      line2: input.shippingAddress.line2 ?? "",
-      city: input.shippingAddress.city,
-      state: input.shippingAddress.state,
-      pincode: input.shippingAddress.pincode,
-      phone: input.shippingAddress.phone ?? "",
-    },
-    status: "pending_payment",
-    payment: { provider: provider.name, method: input.paymentMethod, status: "created" },
-    timeline: [{ status: "pending_payment", at: new Date(), note: "Order created" }],
-  });
-
-  const intent = await provider.createIntent(order);
+  let order: OrderDoc;
+  let intent: Awaited<ReturnType<typeof provider.createIntent>>;
+  try {
+    order = await OrderModel.create({
+      orderNo: generateOrderNo(),
+      userId: owner.userId ?? null,
+      email: input.email.toLowerCase().trim(),
+      items: lines,
+      subtotal: totals.subtotal,
+      discount: totals.discount,
+      shippingFee: totals.shipping,
+      total: totals.total,
+      promoCode: totals.promoCode ?? "",
+      shippingAddress: {
+        firstName: input.shippingAddress.firstName,
+        lastName: input.shippingAddress.lastName ?? "",
+        line1: input.shippingAddress.line1,
+        line2: input.shippingAddress.line2 ?? "",
+        city: input.shippingAddress.city,
+        state: input.shippingAddress.state,
+        pincode: input.shippingAddress.pincode,
+        phone: input.shippingAddress.phone ?? "",
+      },
+      status: "pending_payment",
+      payment: { provider: provider.name, method: input.paymentMethod, status: "created" },
+      timeline: [{ status: "pending_payment", at: new Date(), note: "Order created" }],
+    });
+    intent = await provider.createIntent(order);
+  } catch (err) {
+    // Order creation or payment-intent setup failed after stock was reserved — give it back.
+    await restockItems(stockLines);
+    throw err;
+  }
   order.payment.providerRef = intent.ref;
 
   // Mock provider and Cash-on-Delivery are settled immediately.

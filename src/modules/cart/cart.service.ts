@@ -131,10 +131,12 @@ export async function toResolvedCart(cart: CartDoc): Promise<ResolvedCart> {
 export async function addItem(owner: CartOwner, productSlug: string, qty: number) {
   const product = await ProductModel.findOne({ slug: productSlug, status: "active" });
   if (!product) throw notFound("Product");
+  if (product.stockQty <= 0) throw badInput("This item is out of stock");
   const cart = await getOrCreateCart(owner);
   const existing = cart.items.find((i) => i.productSlug === productSlug);
-  if (existing) existing.qty = Math.min(99, existing.qty + qty);
-  else cart.items.push({ productSlug, qty: Math.min(99, Math.max(1, qty)) });
+  const nextQty = Math.min(99, product.stockQty, (existing?.qty ?? 0) + qty);
+  if (existing) existing.qty = nextQty;
+  else cart.items.push({ productSlug, qty: Math.max(1, nextQty) });
   await cart.save();
   return toResolvedCart(cart);
 }
@@ -144,9 +146,13 @@ export async function setItemQty(owner: CartOwner, productSlug: string, qty: num
   if (qty <= 0) {
     cart.set("items", cart.items.filter((i) => i.productSlug !== productSlug));
   } else {
+    const product = await ProductModel.findOne({ slug: productSlug, status: "active" });
+    if (!product) throw notFound("Product");
+    if (product.stockQty <= 0) throw badInput("This item is out of stock");
+    const cappedQty = Math.min(99, qty, product.stockQty);
     const existing = cart.items.find((i) => i.productSlug === productSlug);
-    if (existing) existing.qty = Math.min(99, qty);
-    else cart.items.push({ productSlug, qty: Math.min(99, qty) });
+    if (existing) existing.qty = cappedQty;
+    else cart.items.push({ productSlug, qty: cappedQty });
   }
   await cart.save();
   return toResolvedCart(cart);

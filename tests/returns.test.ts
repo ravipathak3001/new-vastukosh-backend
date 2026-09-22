@@ -26,6 +26,7 @@ beforeEach(async () => {
     category: "idols",
     image: "/x.jpg",
     status: "active",
+    stockQty: 100,
   });
 });
 

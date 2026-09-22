@@ -18,6 +18,7 @@ beforeEach(async () => {
     category: "idols",
     image: "/x.jpg",
     status: "active",
+    stockQty: 100,
   });
   await PromoModel.create({ code: "SHANTI20", kind: "percent", amount: 20 });
 });
@@ -76,6 +77,67 @@ describe("cart → order", () => {
 
     const cart = await gql(`{ cart(anonId: "g1") { itemCount } }`);
     expect(cart.data.cart.itemCount).toBe(0);
+  });
+});
+
+describe("stock enforcement", () => {
+  it("rejects adding an out-of-stock item to the cart", async () => {
+    await ProductModel.updateOne({ slug: "test-ganesha" }, { $set: { stockQty: 0 } });
+    const add = await gql(
+      `mutation { addToCart(anonId: "g2", productSlug: "test-ganesha", qty: 1) { itemCount } }`,
+    );
+    expect(add.errors?.[0]?.message).toMatch(/out of stock/i);
+  });
+
+  it("caps cart quantity at the available stock", async () => {
+    await ProductModel.updateOne({ slug: "test-ganesha" }, { $set: { stockQty: 2 } });
+    const add = await gql(
+      `mutation { addToCart(anonId: "g3", productSlug: "test-ganesha", qty: 5) { itemCount } }`,
+    );
+    expect(add.data.addToCart.itemCount).toBe(2);
+  });
+
+  it("decrements stock on order placement and restores it on cancellation", async () => {
+    await gql(`mutation { addToCart(anonId: "g4", productSlug: "test-ganesha", qty: 3) { itemCount } }`);
+    const placed = await gql(
+      `mutation { placeOrder(input: {
+        email: "s@test.com", paymentMethod: cod, anonId: "g4",
+        shippingAddress: { firstName: "A", line1: "L1", city: "C", state: "S", pincode: "110001" }
+      }) { order { orderNo status } } }`,
+    );
+    const orderNo = placed.data.placeOrder.order.orderNo as string;
+    expect(placed.data.placeOrder.order.status).toBe("consecration");
+
+    const afterOrder = await ProductModel.findOne({ slug: "test-ganesha" });
+    expect(afterOrder!.stockQty).toBe(97);
+
+    const cancelled = await gql(
+      `mutation ($n: String!) { cancelOrder(orderNo: $n, anonId: "g4") { status } }`,
+      { n: orderNo },
+    );
+    expect(cancelled.data.cancelOrder.status).toBe("cancelled");
+
+    const afterCancel = await ProductModel.findOne({ slug: "test-ganesha" });
+    expect(afterCancel!.stockQty).toBe(100);
+  });
+
+  it("rejects placing an order for more than the available stock", async () => {
+    await ProductModel.updateOne({ slug: "test-ganesha" }, { $set: { stockQty: 100 } });
+    await gql(`mutation { addToCart(anonId: "g5", productSlug: "test-ganesha", qty: 5) { itemCount } }`);
+    // Sell down the stock from under the cart after it was added, to force the
+    // final placeOrder-time check (not just the addToCart-time cap) to fire.
+    await ProductModel.updateOne({ slug: "test-ganesha" }, { $set: { stockQty: 2 } });
+
+    const placed = await gql(
+      `mutation { placeOrder(input: {
+        email: "s2@test.com", paymentMethod: cod, anonId: "g5",
+        shippingAddress: { firstName: "A", line1: "L1", city: "C", state: "S", pincode: "110001" }
+      }) { order { status } } }`,
+    );
+    expect(placed.errors?.[0]?.message).toMatch(/enough stock/i);
+
+    const stillHas = await ProductModel.findOne({ slug: "test-ganesha" });
+    expect(stillHas!.stockQty).toBe(2); // nothing was decremented
   });
 });
 

@@ -4,6 +4,7 @@ import { logger } from "../../config/logger.js";
 import { searchRegex } from "../../graphql/admin-common.js";
 import { OrderModel, type OrderDoc } from "../order/order.model.js";
 import { getShippingProvider } from "../shipping/shipping.provider.js";
+import { restockItems } from "../catalog/catalog.service.js";
 import { ReturnModel, type ReturnDoc, type ReturnStatus } from "./return.model.js";
 
 export const RETURN_WINDOW_DAYS = 7;
@@ -223,5 +224,7 @@ export async function refundReturn(returnNo: string, amount: number): Promise<Re
   if (amount <= 0) throw badInput("Refund amount must be greater than zero");
   ret.refundAmount = amount;
   await ret.save();
-  return advance(ret, "refunded", `Refunded ₹${amount}`);
+  const done = await advance(ret, "refunded", `Refunded ₹${amount}`);
+  await restockItems(ret.items.map((i) => ({ productSlug: i.productSlug, qty: i.qty })));
+  return done;
 }

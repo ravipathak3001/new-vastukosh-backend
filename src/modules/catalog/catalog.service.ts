@@ -1,5 +1,5 @@
 import type { FilterQuery } from "mongoose";
-import { notFound } from "../../shared/errors.js";
+import { badInput, notFound } from "../../shared/errors.js";
 import { searchRegex } from "../../graphql/admin-common.js";
 import { notifyFrontendRevalidate } from "../../shared/http/revalidate-client.js";
 import {
@@ -117,6 +117,39 @@ export async function upsertProduct(
 
 export async function archiveProduct(slug: string): Promise<ProductDoc> {
   return setProductStatus(slug, "archived");
+}
+
+export type StockLine = { productSlug: string; qty: number };
+
+/**
+ * Atomically decrements stock for each line, one product at a time (no
+ * multi-document Mongo transaction elsewhere in this codebase, so we don't
+ * introduce one here either). Each decrement is guarded by `stockQty: { $gte }`
+ * so concurrent checkouts can't oversell the same product. If any line can't be
+ * satisfied, already-decremented lines are put back before throwing.
+ */
+export async function reserveStock(items: StockLine[]): Promise<void> {
+  const reserved: StockLine[] = [];
+  for (const item of items) {
+    const res = await ProductModel.updateOne(
+      { slug: item.productSlug, stockQty: { $gte: item.qty } },
+      { $inc: { stockQty: -item.qty } },
+    );
+    if (res.modifiedCount === 0) {
+      await restockItems(reserved);
+      throw badInput(`${item.productSlug} doesn't have enough stock left`);
+    }
+    reserved.push(item);
+  }
+}
+
+/** Inverse of `reserveStock` — used on cancellation/refund. */
+export async function restockItems(items: StockLine[]): Promise<void> {
+  await Promise.all(
+    items.map((item) =>
+      ProductModel.updateOne({ slug: item.productSlug }, { $inc: { stockQty: item.qty } }),
+    ),
+  );
 }
 
 export async function setProductStatus(

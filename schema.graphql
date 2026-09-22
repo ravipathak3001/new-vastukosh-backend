@@ -1103,6 +1103,7 @@ type Product {
   seoRaw: SeoMetaRaw
   slug: String
   status: ProductStatus
+  stockQty: Int
   tagline: LocalizedString
 }
 
@@ -1149,6 +1150,7 @@ input ProductInput {
   seo: SeoMetaInput
   slug: String!
   status: ProductStatus
+  stockQty: Int
   tagline: JSON
 }
 

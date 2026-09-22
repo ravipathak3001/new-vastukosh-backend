@@ -40,6 +40,7 @@ const productSchema = new Schema(
     price: { type: Number, required: true, min: 0 },
     mrp: { type: Number, min: 0 },
     currency: { type: String, enum: ["INR"], default: "INR" },
+    stockQty: { type: Number, required: true, min: 0, default: 0 },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     reviewsCount: { type: Number, default: 0, min: 0 },
     category: { type: String, enum: PRODUCT_CATEGORIES, required: true, index: true },
