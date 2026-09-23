@@ -10,6 +10,7 @@ import {
 } from "./product.model.js";
 import type { RashiDoc } from "./rashi.model.js";
 import type { CollectionDoc } from "./collection.model.js";
+import type { StoneDoc } from "./stone.model.js";
 import {
   getCollectionBySlug,
   getProductBySlug,
@@ -23,6 +24,7 @@ import {
   type ProductFilter,
   type ProductSort,
 } from "./catalog.service.js";
+import { listStones, getStoneBySlug, upsertStone, archiveStone, type StoneFilter } from "./stone.service.js";
 import { ProductModel } from "./product.model.js";
 import { SeoMetaInput } from "../seo/seo.schema.js";
 
@@ -132,6 +134,37 @@ export const CollectionRef = builder.objectRef<CollectionDoc>("Collection").impl
   }),
 });
 
+export const StoneRef = builder.objectRef<StoneDoc>("Stone").implement({
+  fields: (t) => ({
+    slug: t.exposeString("slug"),
+    name: t.field({ type: LocalizedStringRef, resolve: (s) => s.name }),
+    grahas: t.exposeStringList("grahas"),
+    primary: t.exposeBoolean("primary"),
+    pricePerBead: t.exposeFloat("pricePerBead"),
+    description: t.field({ type: LocalizedStringRef, nullable: true, resolve: (s) => s.description ?? null }),
+    status: t.exposeString("status", { authScopes: { permission: "catalog.view" } }),
+  }),
+});
+
+const StoneFilterInput = builder.inputType("StoneFilterInput", {
+  fields: (t) => ({
+    graha: t.string({ required: false }),
+    search: t.string({ required: false }),
+  }),
+});
+
+const StoneInput = builder.inputType("StoneInput", {
+  fields: (t) => ({
+    slug: t.string({ required: true }),
+    name: t.field({ type: "JSON", required: false }),
+    grahas: t.stringList({ required: false }),
+    primary: t.boolean({ required: false }),
+    pricePerBead: t.float({ required: false }),
+    description: t.field({ type: "JSON", required: false }),
+    status: t.string({ required: false }),
+  }),
+});
+
 const ProductFilterInput = builder.inputType("ProductFilterInput", {
   fields: (t) => ({
     category: t.field({ type: ProductCategory, required: false }),
@@ -227,6 +260,19 @@ export function registerCatalogModule() {
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => getCollectionBySlug(slug).catch(() => null),
     }),
+
+    stones: t.field({
+      type: [StoneRef],
+      args: { filter: t.arg({ type: StoneFilterInput, required: false }) },
+      resolve: (_p, args) => listStones((args.filter ?? {}) as StoneFilter),
+    }),
+
+    stone: t.field({
+      type: StoneRef,
+      nullable: true,
+      args: { slug: t.arg.string({ required: true }) },
+      resolve: (_p, { slug }) => getStoneBySlug(slug).catch(() => null),
+    }),
   }));
 
   builder.mutationFields((t) => ({
@@ -241,6 +287,19 @@ export function registerCatalogModule() {
       authScopes: { permission: "catalog.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => archiveProduct(slug),
+    }),
+
+    upsertStone: t.field({
+      type: StoneRef,
+      authScopes: { permission: "catalog.manage" },
+      args: { input: t.arg({ type: StoneInput, required: true }) },
+      resolve: (_p, { input }) => upsertStone(input as never),
+    }),
+    archiveStone: t.field({
+      type: StoneRef,
+      authScopes: { permission: "catalog.manage" },
+      args: { slug: t.arg.string({ required: true }) },
+      resolve: (_p, { slug }) => archiveStone(slug),
     }),
   }));
 }

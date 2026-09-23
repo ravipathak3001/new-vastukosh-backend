@@ -12,6 +12,7 @@ import {
 } from "./product.model.js";
 import { RashiModel } from "./rashi.model.js";
 import { CollectionModel, type CollectionDoc } from "./collection.model.js";
+import { isCustomBraceletSlug } from "./custom-bracelet.js";
 
 export type ProductFilter = {
   category?: ProductCategory;
@@ -131,6 +132,9 @@ export type StockLine = { productSlug: string; qty: number };
 export async function reserveStock(items: StockLine[]): Promise<void> {
   const reserved: StockLine[] = [];
   for (const item of items) {
+    // A picker-built combo bracelet is made to order from loose, individually-priced stones — see
+    // `custom-bracelet.ts` — not drawn from a finished product's stock at all.
+    if (isCustomBraceletSlug(item.productSlug)) continue;
     const res = await ProductModel.updateOne(
       { slug: item.productSlug, stockQty: { $gte: item.qty } },
       { $inc: { stockQty: -item.qty } },
@@ -146,9 +150,9 @@ export async function reserveStock(items: StockLine[]): Promise<void> {
 /** Inverse of `reserveStock` — used on cancellation/refund. */
 export async function restockItems(items: StockLine[]): Promise<void> {
   await Promise.all(
-    items.map((item) =>
-      ProductModel.updateOne({ slug: item.productSlug }, { $inc: { stockQty: item.qty } }),
-    ),
+    items
+      .filter((item) => !isCustomBraceletSlug(item.productSlug))
+      .map((item) => ProductModel.updateOne({ slug: item.productSlug }, { $inc: { stockQty: item.qty } })),
   );
 }
 

@@ -522,6 +522,52 @@ describe("admin dashboard", () => {
   });
 });
 
+describe("stone admin CRUD & pricing", () => {
+  it("upserts, archives and restores a stone", async () => {
+    const created = await gql(
+      `mutation { upsertStone(input: {
+        slug: "carnelian", name: { en: "Carnelian", hi: "कार्नेलियन" }, grahas: ["Mars"], primary: false, pricePerBead: 12
+      }) { slug primary pricePerBead grahas } }`,
+      undefined,
+      asAdmin,
+    );
+    expect(created.data.upsertStone).toEqual({
+      slug: "carnelian",
+      primary: false,
+      pricePerBead: 12,
+      grahas: ["Mars"],
+    });
+
+    const publicList = await gql(`{ stones { slug } }`);
+    expect(publicList.data.stones.map((s: any) => s.slug)).toEqual(["carnelian"]);
+
+    const archived = await gql(`mutation { archiveStone(slug: "carnelian") { status } }`, undefined, asAdmin);
+    expect(archived.data.archiveStone.status).toBe("archived");
+
+    // Archived stones drop out of the public list but stay visible to admins.
+    const afterArchive = await gql(`{ stones { slug } }`);
+    expect(afterArchive.data.stones).toEqual([]);
+    const adminView = await gql(
+      `{ adminStones(filter: { status: "archived" }) { total items { slug } } }`,
+      undefined,
+      asAdmin,
+    );
+    expect(adminView.data.adminStones.items.map((s: any) => s.slug)).toEqual(["carnelian"]);
+
+    const restored = await gql(`mutation { restoreStone(slug: "carnelian") { status } }`, undefined, asAdmin);
+    expect(restored.data.restoreStone.status).toBe("active");
+  });
+
+  it("rejects a stone upsert from a non-admin token", async () => {
+    const res = await gql(
+      `mutation { upsertStone(input: { slug: "x", name: { en: "X", hi: "X" }, grahas: ["Mars"], pricePerBead: 1 }) { slug } }`,
+      undefined,
+      asCustomer,
+    );
+    expect(res.errors?.[0]?.extensions?.code).toBe("FORBIDDEN");
+  });
+});
+
 function orderFixture(overrides: { orderNo: string; email: string; status: string }) {
   return {
     ...overrides,

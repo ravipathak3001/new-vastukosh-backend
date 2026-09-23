@@ -121,6 +121,19 @@ input AdminRoleInput {
   permissions: [String!]!
 }
 
+input AdminStoneFilterInput {
+  graha: String
+  search: String
+  status: String
+}
+
+type AdminStonePage {
+  items: [Stone!]
+  page: Int
+  pageSize: Int
+  total: Int
+}
+
 input AdminSubscriberFilterInput {
   search: String
   status: SubscriberStatus
@@ -683,6 +696,7 @@ type Mutation {
   applyPromo(anonId: String, code: String!): Cart
   approveReturn(note: String, returnNo: String!): Return
   archiveProduct(slug: String!): Product
+  archiveStone(slug: String!): Stone
   assignUserRoles(roleIds: [ID!]!, userId: ID!): User
   bookConsultation(input: BookConsultationInput!): ConsultationBooking
   cancelOrder(anonId: String, orderNo: String!): Order
@@ -714,6 +728,7 @@ type Mutation {
   requestReturn(items: [ReturnItemInput!]!, orderNo: String!): Return
   resetPassword(newPassword: String!, token: String!): Boolean
   restoreProduct(slug: String!): Product
+  restoreStone(slug: String!): Stone
   schedulePickup(orderNo: String!): Order
   scheduleReturnPickup(returnNo: String!): Return
   setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
@@ -743,6 +758,7 @@ type Mutation {
   upsertProduct(input: ProductInput!): Product
   upsertPromo(input: PromoInput!): Promo
   upsertRedirect(input: RedirectInput!): Redirect
+  upsertStone(input: StoneInput!): Stone
   upsertTestimonial(input: TestimonialInput!): Testimonial
   verifyOrder(orderNo: String!): Order
 }
@@ -1229,6 +1245,8 @@ type Query {
   adminReturns(filter: AdminReturnFilter, page: Int, pageSize: Int): AdminReturnPage
   adminRoles: [AdminRole!]
   adminShippingAutomationSettings: ShippingAutomationSettings
+  adminStone(slug: String!): Stone
+  adminStones(filter: AdminStoneFilterInput, page: Int, pageSize: Int): AdminStonePage
   adminTestimonials: [Testimonial!]
   adminUser(id: ID!): User
   adminUsers(filter: AdminUserFilterInput, page: Int, pageSize: Int): AdminUserPage
@@ -1332,6 +1350,8 @@ type Query {
   seoForPath(path: String!): ResolvedSeo
   siteSettings: SiteSettings
   sitemapEntries(baseUrl: String): [SitemapEntry!]
+  stone(slug: String!): Stone
+  stones(filter: StoneFilterInput): [Stone!]
   testimonials(featuredOnly: Boolean): [Testimonial!]
 }
 
@@ -1541,6 +1561,31 @@ input SocialLinkInput {
   href: String!
   icon: String
   label: String!
+}
+
+type Stone {
+  description: LocalizedString
+  grahas: [String!]
+  name: LocalizedString
+  pricePerBead: Float
+  primary: Boolean
+  slug: String
+  status: String
+}
+
+input StoneFilterInput {
+  graha: String
+  search: String
+}
+
+input StoneInput {
+  description: JSON
+  grahas: [String!]
+  name: JSON
+  pricePerBead: Float
+  primary: Boolean
+  slug: String!
+  status: String
 }
 
 enum SubscriberStatus {

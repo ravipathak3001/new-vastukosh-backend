@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ProductModel } from "../src/modules/catalog/product.model.js";
+import { StoneModel } from "../src/modules/catalog/stone.model.js";
 import { PromoModel } from "../src/modules/cart/cart.model.js";
 import { makeExecutor, resetDb, startTestDb, stopTestDb } from "./helpers.js";
 
@@ -21,6 +22,18 @@ beforeEach(async () => {
     stockQty: 100,
   });
   await PromoModel.create({ code: "SHANTI20", kind: "percent", amount: 20 });
+  await StoneModel.create([
+    { slug: "red-coral", name: { en: "Red Coral", hi: "मूंगा" }, grahas: ["Mars"], primary: true, pricePerBead: 150 },
+    { slug: "carnelian", name: { en: "Carnelian", hi: "कार्नेलियन" }, grahas: ["Mars"], primary: false, pricePerBead: 12 },
+    {
+      slug: "discontinued-stone",
+      name: { en: "Discontinued", hi: "d" },
+      grahas: ["Mars"],
+      primary: false,
+      pricePerBead: 5,
+      status: "archived",
+    },
+  ]);
 });
 
 describe("auth", () => {
@@ -138,6 +151,56 @@ describe("stock enforcement", () => {
 
     const stillHas = await ProductModel.findOne({ slug: "test-ganesha" });
     expect(stillHas!.stockQty).toBe(2); // nothing was decremented
+  });
+});
+
+describe("custom bracelets", () => {
+  const design = "custom:Mars:carnelian:9,Mars:red-coral:12"; // fabricated multi-segment for the maths — no real astrology needed for this test
+
+  it("prices a custom bracelet from its segments' current stone prices, not a stored product price", async () => {
+    const add = await gql(
+      `mutation ($slug: String!) { addToCart(anonId: "c1", productSlug: $slug, qty: 1) { itemCount totals { subtotal } } }`,
+      { slug: design },
+    );
+    expect(add.data.addToCart.itemCount).toBe(1);
+    // 9*12 (carnelian) + 12*150 (red coral) = 108 + 1800
+    expect(add.data.addToCart.totals.subtotal).toBe(1908);
+  });
+
+  it("places an order for a custom bracelet, and does not touch any product's stock for it", async () => {
+    await gql(`mutation ($slug: String!) { addToCart(anonId: "c2", productSlug: $slug, qty: 2) { itemCount } }`, {
+      slug: design,
+    });
+    const placed = await gql(
+      `mutation { placeOrder(input: {
+        email: "s@test.com", paymentMethod: cod, anonId: "c2",
+        shippingAddress: { firstName: "A", line1: "L1", city: "C", state: "S", pincode: "110001" }
+      }) { order { status total items { productSlug qty unitPrice } } } }`,
+    );
+    expect(placed.data.placeOrder.order.status).toBe("consecration");
+    expect(placed.data.placeOrder.order.total).toBe(1908 * 2);
+    expect(placed.data.placeOrder.order.items).toEqual([
+      { productSlug: design, qty: 2, unitPrice: 1908 },
+    ]);
+
+    // Reserving stock for a made-to-order bracelet is a deliberate no-op, not a bug — confirm no
+    // Product row anywhere was touched (there isn't even one matching this slug to touch).
+    const anyNegative = await ProductModel.findOne({ stockQty: { $lt: 0 } });
+    expect(anyNegative).toBeNull();
+  });
+
+  it("rejects adding a custom bracelet that references an inactive stone", async () => {
+    const add = await gql(
+      `mutation { addToCart(anonId: "c3", productSlug: "custom:Mars:discontinued-stone:9", qty: 1) { itemCount } }`,
+    );
+    expect(add.errors?.[0]?.message).toBeTruthy();
+  });
+
+  it("rejects a malformed custom-bracelet slug", async () => {
+    const add = await gql(
+      `mutation { addToCart(anonId: "c4", productSlug: "custom:not-a-valid-design", qty: 1) { itemCount } }`,
+    );
+    expect(add.errors?.[0]?.message).toMatch(/isn't valid/i);
   });
 });
 

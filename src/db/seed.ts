@@ -9,6 +9,7 @@ import { hashPassword } from "../shared/auth/password.js";
 import { ProductModel } from "../modules/catalog/product.model.js";
 import { RashiModel } from "../modules/catalog/rashi.model.js";
 import { CollectionModel } from "../modules/catalog/collection.model.js";
+import { StoneModel } from "../modules/catalog/stone.model.js";
 import {
   FaqModel,
   LegalDocModel,
@@ -28,6 +29,7 @@ import { UserModel } from "../modules/auth/auth.model.js";
 import { ensureSuperAdminRole } from "../modules/roles/role.service.js";
 import { productSeeds } from "./seeds/products.js";
 import { rashiSeeds } from "./seeds/rashis.js";
+import { stoneSeeds } from "./seeds/stones.js";
 import {
   dailyCardSeeds,
   dailyMantraSeeds,
@@ -77,6 +79,7 @@ async function main() {
       LegalDocModel.deleteMany({}),
       PageModel.deleteMany({}),
       PromoModel.deleteMany({}),
+      StoneModel.deleteMany({}),
       ConsultationServiceModel.deleteMany({}),
       DailyMantraModel.deleteMany({}),
       DailyVerseModel.deleteMany({}),
@@ -91,6 +94,7 @@ async function main() {
     "slug",
   );
   await upsertMany(CollectionModel, collectionSeeds, "slug");
+  await upsertMany(StoneModel, stoneSeeds, "slug");
   await upsertMany(TestimonialModel, testimonialSeeds, "key");
   await upsertMany(FaqModel, faqSeeds, "key");
   await upsertMany(LegalDocModel, legalSeeds, "slug");
@@ -137,6 +141,7 @@ async function main() {
     products: await ProductModel.countDocuments(),
     rashis: await RashiModel.countDocuments(),
     collections: await CollectionModel.countDocuments(),
+    stones: await StoneModel.countDocuments(),
     testimonials: await TestimonialModel.countDocuments(),
     faqs: await FaqModel.countDocuments(),
     legalDocs: await LegalDocModel.countDocuments(),

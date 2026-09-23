@@ -3,12 +3,14 @@ import { resolvePaging, paged, type Paged } from "../../graphql/admin-common.js"
 import { SeoMetaInput, SeoMetaRawRef } from "../seo/seo.schema.js";
 import type { SeoMeta } from "../seo/seo.model.js";
 import type { ProductDoc } from "./product.model.js";
+import type { StoneDoc } from "./stone.model.js";
 import {
   ProductRef,
   ProductCategory,
   ProductNeed,
   ProductStatusEnum,
   CollectionRef,
+  StoneRef,
 } from "./catalog.schema.js";
 import {
   deleteCollection,
@@ -19,6 +21,12 @@ import {
   upsertCollection,
   type AdminProductFilter,
 } from "./catalog.service.js";
+import {
+  getStoneForAdmin,
+  listStonesForAdmin,
+  setStoneStatus,
+  type AdminStoneFilter,
+} from "./stone.service.js";
 
 const AdminProductFilterInput = builder.inputType("AdminProductFilterInput", {
   fields: (t) => ({
@@ -33,6 +41,25 @@ const AdminProductPage = builder
   .implement({
     fields: (t) => ({
       items: t.field({ type: [ProductRef], resolve: (p) => p.items }),
+      total: t.exposeInt("total"),
+      page: t.exposeInt("page"),
+      pageSize: t.exposeInt("pageSize"),
+    }),
+  });
+
+const AdminStoneFilterInput = builder.inputType("AdminStoneFilterInput", {
+  fields: (t) => ({
+    status: t.string({ required: false }),
+    graha: t.string({ required: false }),
+    search: t.string({ required: false }),
+  }),
+});
+
+const AdminStonePage = builder
+  .objectRef<Paged<StoneDoc>>("AdminStonePage")
+  .implement({
+    fields: (t) => ({
+      items: t.field({ type: [StoneRef], resolve: (p) => p.items }),
       total: t.exposeInt("total"),
       page: t.exposeInt("page"),
       pageSize: t.exposeInt("pageSize"),
@@ -149,6 +176,34 @@ export function registerCatalogAdminModule() {
       authScopes: { permission: "catalog.view" },
       resolve: () => listCollectionsForAdmin(),
     }),
+
+    adminStones: t.field({
+      type: AdminStonePage,
+      authScopes: { permission: "catalog.view" },
+      args: {
+        filter: t.arg({ type: AdminStoneFilterInput, required: false }),
+        page: t.arg.int({ required: false }),
+        pageSize: t.arg.int({ required: false }),
+      },
+      resolve: async (_p, args) => {
+        const { page, pageSize, skip, limit } = resolvePaging(args);
+        const filter: AdminStoneFilter = {
+          status: (args.filter?.status ?? null) as AdminStoneFilter["status"],
+          graha: (args.filter?.graha ?? undefined) as AdminStoneFilter["graha"],
+          search: args.filter?.search ?? undefined,
+        };
+        const { items, total } = await listStonesForAdmin(filter, skip, limit);
+        return paged(items, total, { page, pageSize });
+      },
+    }),
+
+    adminStone: t.field({
+      type: StoneRef,
+      nullable: true,
+      authScopes: { permission: "catalog.view" },
+      args: { slug: t.arg.string({ required: true }) },
+      resolve: (_p, { slug }) => getStoneForAdmin(slug).catch(() => null),
+    }),
   }));
 
   builder.mutationFields((t) => ({
@@ -157,6 +212,13 @@ export function registerCatalogAdminModule() {
       authScopes: { permission: "catalog.manage" },
       args: { slug: t.arg.string({ required: true }) },
       resolve: (_p, { slug }) => setProductStatus(slug, "active"),
+    }),
+
+    restoreStone: t.field({
+      type: StoneRef,
+      authScopes: { permission: "catalog.manage" },
+      args: { slug: t.arg.string({ required: true }) },
+      resolve: (_p, { slug }) => setStoneStatus(slug, "active"),
     }),
 
     upsertCollection: t.field({
