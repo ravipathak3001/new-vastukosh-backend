@@ -719,7 +719,7 @@ type Mutation {
   markReturnReceived(note: String, returnNo: String!): Return
   placeOrder(input: PlaceOrderInput!): PlaceOrderResult
   refreshToken(refreshToken: String): AuthPayload
-  refundOrder(note: String, orderNo: String!): Order
+  refundOrder(amount: Float, note: String, orderNo: String!): Order
   refundReturn(amount: Float!, returnNo: String!): Return
   rejectReturn(note: String, returnNo: String!): Return
   removeAddress(addressId: ID!): User
@@ -761,6 +761,7 @@ type Mutation {
   upsertStone(input: StoneInput!): Stone
   upsertTestimonial(input: TestimonialInput!): Testimonial
   verifyOrder(orderNo: String!): Order
+  verifyRazorpayPayment(anonId: String, orderNo: String!, razorpayOrderId: String!, razorpayPaymentId: String!, razorpaySignature: String!): Order
 }
 
 type MutationOk {
@@ -813,7 +814,11 @@ type OrderPayment {
   method: PaymentMethod
   provider: String
   providerRef: String
+  refundAmount: Float
+  refundId: String
+  refundStatus: String
   status: String
+  transactionId: String
 }
 
 type OrderShipment {
@@ -1029,6 +1034,7 @@ enum PaymentMethod {
   card
   cod
   netbanking
+  online
   upi
 }
 
@@ -1394,6 +1400,8 @@ type Return {
   items: [ReturnItem!]
   orderNo: String
   refundAmount: Float
+  refundId: String
+  refundStatus: String
   returnNo: String
   shipment: ReturnShipment
   status: ReturnStatus

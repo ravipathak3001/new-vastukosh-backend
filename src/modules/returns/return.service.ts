@@ -4,6 +4,7 @@ import { logger } from "../../config/logger.js";
 import { searchRegex } from "../../graphql/admin-common.js";
 import { OrderModel, type OrderDoc } from "../order/order.model.js";
 import { getShippingProvider } from "../shipping/shipping.provider.js";
+import { getPaymentProvider } from "../payment/payment.provider.js";
 import { restockItems } from "../catalog/catalog.service.js";
 import { ReturnModel, type ReturnDoc, type ReturnStatus } from "./return.model.js";
 
@@ -218,13 +219,65 @@ export async function markReturnReceived(returnNo: string, note = ""): Promise<R
   return advance(ret, "received", note || "Item received at warehouse");
 }
 
+/**
+ * Refunds a return — full or partial — against its order's captured
+ * payment, then moves the return to `refunded`. Uses the same atomic
+ * "claim" pattern as `refundOrder` (see order.service.ts) so a double-click
+ * can't fire the gateway refund call twice.
+ */
 export async function refundReturn(returnNo: string, amount: number): Promise<ReturnDoc> {
   const ret = await ReturnModel.findOne({ returnNo });
   if (!ret) throw notFound("Return");
   if (amount <= 0) throw badInput("Refund amount must be greater than zero");
-  ret.refundAmount = amount;
-  await ret.save();
-  const done = await advance(ret, "refunded", `Refunded ₹${amount}`);
-  await restockItems(ret.items.map((i) => ({ productSlug: i.productSlug, qty: i.qty })));
-  return done;
+  if (!canTransition(ret.status, "refunded")) {
+    throw badInput(`Cannot refund a return in status ${ret.status}`);
+  }
+
+  const order = await OrderModel.findOne({ orderNo: ret.orderNo });
+  if (!order) throw notFound("Order");
+
+  if (!order.payment.transactionId) {
+    // Nothing was captured through the gateway for this order (COD) —
+    // there's no money to send back, just record it and restock.
+    ret.refundAmount = amount;
+    const done = await advance(ret, "refunded", `Refunded ₹${amount}`);
+    await restockItems(ret.items.map((i) => ({ productSlug: i.productSlug, qty: i.qty })));
+    return done;
+  }
+  if (amount > order.total) throw badInput("Refund amount cannot exceed the order total");
+
+  const claimed = await ReturnModel.findOneAndUpdate(
+    { returnNo, refundStatus: { $in: ["", "failed"] } },
+    { $set: { refundStatus: "pending" } },
+    { new: true },
+  );
+  if (!claimed) throw badInput("A refund for this return is already in progress or complete");
+
+  try {
+    const result = await getPaymentProvider().refund(
+      order.payment.transactionId,
+      Math.round(amount * 100),
+      { returnNo, orderNo: ret.orderNo },
+    );
+    claimed.refundId = result.refundId;
+    claimed.refundStatus = result.status;
+    claimed.refundAmount = amount;
+    await claimed.save();
+    const done = await advance(claimed, "refunded", `Refunded ₹${amount}`);
+    await restockItems(claimed.items.map((i) => ({ productSlug: i.productSlug, qty: i.qty })));
+    return done;
+  } catch (err) {
+    claimed.refundStatus = "failed";
+    await claimed.save();
+    throw err;
+  }
+}
+
+/** Webhook-driven update once the gateway finishes settling a refund it previously accepted (see `refundReturn`). Returns whether a return actually matched. */
+export async function syncReturnRefundStatus(
+  refundId: string,
+  status: "processed" | "failed",
+): Promise<boolean> {
+  const res = await ReturnModel.updateOne({ refundId }, { $set: { refundStatus: status } });
+  return res.matchedCount > 0;
 }

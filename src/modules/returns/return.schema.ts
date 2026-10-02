@@ -58,6 +58,8 @@ export const ReturnRef = builder.objectRef<ReturnDoc>("Return").implement({
     items: t.field({ type: [ReturnItemRef], resolve: (r) => r.items }),
     status: t.field({ type: ReturnStatusEnum, resolve: (r) => r.status as never }),
     refundAmount: t.exposeFloat("refundAmount"),
+    refundId: t.exposeString("refundId"),
+    refundStatus: t.exposeString("refundStatus"),
     adminNote: t.exposeString("adminNote", { authScopes: { permission: "returns.view" } }),
     shipment: t.field({ type: ReturnShipmentRef, nullable: true, resolve: (r) => r.shipment }),
     timeline: t.field({ type: [ReturnTimelineRef], resolve: (r) => r.timeline }),

@@ -73,14 +73,18 @@ export function registerOrderAdminModule() {
 
   builder.mutationFields((t) => ({
     // Status moves reuse the existing admin `advanceOrderStatus` mutation.
+    // Refunds are the one exception — they need to call the payment gateway,
+    // so they go through this dedicated mutation instead.
     refundOrder: t.field({
       type: OrderRef,
       authScopes: { permission: "orders.manage" },
       args: {
         orderNo: t.arg.string({ required: true }),
         note: t.arg.string({ required: false }),
+        /** Omit for a full refund of the order total. */
+        amount: t.arg.float({ required: false }),
       },
-      resolve: (_p, { orderNo, note }) => refundOrder(orderNo, note ?? ""),
+      resolve: (_p, { orderNo, note, amount }) => refundOrder(orderNo, note ?? "", amount),
     }),
   }));
 }

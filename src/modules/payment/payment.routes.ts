@@ -1,7 +1,8 @@
 import express, { Router } from "express";
 import { logger } from "../../config/logger.js";
 import { getPaymentProvider } from "./payment.provider.js";
-import { markOrderPaid } from "../order/order.service.js";
+import { markOrderFailed, markOrderPaid, syncOrderRefundStatus } from "../order/order.service.js";
+import { syncReturnRefundStatus } from "../returns/return.service.js";
 
 export const paymentRouter = Router();
 
@@ -26,8 +27,17 @@ paymentRouter.post(
       return res.status(400).json({ error: result.reason });
     }
 
-    if (result.event === "captured") {
-      await markOrderPaid(result.providerRef);
+    if (result.kind === "payment") {
+      if (result.event === "captured") {
+        await markOrderPaid(result.providerRef, result.paymentId);
+      } else {
+        await markOrderFailed(result.providerRef);
+      }
+    } else {
+      // A refund can belong to either a direct order refund or a return's
+      // refund — try the order first, then the return.
+      const matchedOrder = await syncOrderRefundStatus(result.refundId, result.event);
+      if (!matchedOrder) await syncReturnRefundStatus(result.refundId, result.event);
     }
     res.json({ received: true });
   },

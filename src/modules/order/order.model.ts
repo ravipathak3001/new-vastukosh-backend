@@ -14,7 +14,7 @@ export const ORDER_STATUSES = [
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export const PAYMENT_METHODS = ["upi", "card", "netbanking", "cod"] as const;
+export const PAYMENT_METHODS = ["upi", "card", "netbanking", "cod", "online"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_STATUSES = ["created", "authorized", "captured", "failed"] as const;
@@ -70,12 +70,22 @@ const timelineEntrySchema = new Schema(
   { _id: false },
 );
 
+export const REFUND_STATUSES = ["", "pending", "processed", "failed"] as const;
+export type RefundStatus = (typeof REFUND_STATUSES)[number];
+
 const orderPaymentSchema = new Schema(
   {
     provider: { type: String, required: true },
     providerRef: { type: String, default: "" },
+    /** Gateway payment id (e.g. Razorpay's `pay_...`), set once captured — distinct from `providerRef`, which is the gateway *order* id. */
+    transactionId: { type: String, default: "" },
     method: { type: String, enum: PAYMENT_METHODS, required: true },
     status: { type: String, enum: PAYMENT_STATUSES, default: "created" },
+    /** Gateway refund id (e.g. Razorpay's `rfnd_...`), set once a refund is requested. */
+    refundId: { type: String, default: "" },
+    /** `"pending"` while the gateway settles it (common for card refunds), `"processed"` once done, `"failed"` if the gateway rejected it. `""` = never refunded. */
+    refundStatus: { type: String, enum: REFUND_STATUSES, default: "" },
+    refundAmount: { type: Number, default: 0 },
   },
   { _id: false },
 );

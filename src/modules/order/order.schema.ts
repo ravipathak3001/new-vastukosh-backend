@@ -16,6 +16,7 @@ import {
   getOrder,
   listMyOrders,
   placeOrder,
+  verifyRazorpayPayment,
   type PlaceOrderInput,
 } from "./order.service.js";
 
@@ -51,6 +52,10 @@ const OrderPaymentRef = builder.objectRef<OrderDoc["payment"]>("OrderPayment").i
     method: t.field({ type: PaymentMethodEnum, resolve: (p) => p.method as never }),
     status: t.exposeString("status"),
     providerRef: t.exposeString("providerRef"),
+    transactionId: t.exposeString("transactionId"),
+    refundId: t.exposeString("refundId"),
+    refundStatus: t.exposeString("refundStatus"),
+    refundAmount: t.exposeFloat("refundAmount"),
   }),
 });
 
@@ -86,11 +91,16 @@ export const OrderRef = builder.objectRef<OrderDoc>("Order").implement({
      * Statuses this order may move to next via the generic admin stepper.
      * `in_transit` is excluded — that transition only happens through
      * `startDelivery`, which actually creates the Shiprocket shipment.
+     * `refunded` is excluded too — it must go through `refundOrder`, the
+     * only mutation that actually calls the payment gateway; the generic
+     * stepper would otherwise let an admin "mark" an order refunded without
+     * any money moving.
      */
     allowedTransitions: t.field({
       type: [OrderStatusEnum],
       authScopes: { permission: "orders.view" },
-      resolve: (o) => allowedNextStatuses(o.status).filter((s) => s !== "in_transit") as never[],
+      resolve: (o) =>
+        allowedNextStatuses(o.status).filter((s) => s !== "in_transit" && s !== "refunded") as never[],
     }),
   }),
 });
@@ -183,6 +193,26 @@ export function registerOrderModule() {
         cancelOrder(ownerFrom(ctx, anonId), orderNo),
     }),
 
+    /** Confirms a Razorpay payment from the client's Checkout success callback. */
+    verifyRazorpayPayment: t.field({
+      type: OrderRef,
+      args: {
+        orderNo: t.arg.string({ required: true }),
+        razorpayOrderId: t.arg.string({ required: true }),
+        razorpayPaymentId: t.arg.string({ required: true }),
+        razorpaySignature: t.arg.string({ required: true }),
+        anonId: t.arg.string({ required: false }),
+      },
+      resolve: (_p, { orderNo, razorpayOrderId, razorpayPaymentId, razorpaySignature, anonId }, ctx) =>
+        verifyRazorpayPayment(
+          ownerFrom(ctx, anonId),
+          orderNo,
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        ),
+    }),
+
     advanceOrderStatus: t.field({
       type: OrderRef,
       authScopes: { permission: "orders.manage" },
@@ -194,6 +224,9 @@ export function registerOrderModule() {
       resolve: async (_p, { orderNo, status, note }) => {
         if (status === "in_transit") {
           throw badInput("Use startDelivery to move an order to in_transit");
+        }
+        if (status === "refunded") {
+          throw badInput("Use refundOrder to refund an order");
         }
         const order = await OrderModel.findOne({ orderNo });
         if (!order) throw unauthenticated("Order not found");

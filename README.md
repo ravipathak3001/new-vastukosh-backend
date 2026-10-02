@@ -27,6 +27,10 @@ for the frontend's codegen and any other client.
 > for native, localisation, error codes, the full operation catalogue and the
 > `panchang` query.
 
+> **Working on payments?** See [`docs/PAYMENTS.md`](docs/PAYMENTS.md) —
+> the Razorpay integration, why payment confirmation has to be an atomic
+> write, local test-key setup, and the go-live checklist.
+
 ## Getting started
 
 ```bash

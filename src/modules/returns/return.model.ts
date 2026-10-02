@@ -54,6 +54,10 @@ const returnSchema = new Schema(
     items: { type: [returnItemSchema], required: true },
     status: { type: String, enum: RETURN_STATUSES, default: "requested", index: true },
     refundAmount: { type: Number, default: 0 },
+    /** Gateway refund id (e.g. Razorpay's `rfnd_...`). */
+    refundId: { type: String, default: "" },
+    /** `"pending"` while the gateway settles it, `"processed"` once done, `"failed"` if rejected. `""` = never attempted. */
+    refundStatus: { type: String, enum: ["", "pending", "processed", "failed"], default: "" },
     adminNote: { type: String, default: "" },
     shipment: { type: returnShipmentSchema, default: null },
     timeline: { type: [returnTimelineEntrySchema], default: [] },
