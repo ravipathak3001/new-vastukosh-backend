@@ -2,6 +2,7 @@ import type { FilterQuery } from "mongoose";
 import type { GrahaName } from "vedic-kundali";
 import { badInput, notFound } from "../../shared/errors.js";
 import { searchRegex } from "../../graphql/admin-common.js";
+import { notifyFrontendRevalidate } from "../../shared/http/revalidate-client.js";
 import { StoneModel, type Stone, type StoneDoc, type StoneStatus } from "./stone.model.js";
 
 export type StoneFilter = { graha?: GrahaName; search?: string };
@@ -88,16 +89,19 @@ export async function getStoneForAdmin(slug: string): Promise<StoneDoc> {
 }
 
 export async function upsertStone(input: Partial<Stone> & { slug: string }): Promise<StoneDoc> {
-  return StoneModel.findOneAndUpdate(
+  const doc = await StoneModel.findOneAndUpdate(
     { slug: input.slug },
     { $set: input },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
+  await notifyFrontendRevalidate(["catalog"]);
+  return doc;
 }
 
 export async function setStoneStatus(slug: string, status: StoneStatus): Promise<StoneDoc> {
   const doc = await StoneModel.findOneAndUpdate({ slug }, { $set: { status } }, { new: true });
   if (!doc) throw notFound("Stone");
+  await notifyFrontendRevalidate(["catalog"]);
   return doc;
 }
 
