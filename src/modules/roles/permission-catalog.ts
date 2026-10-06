@@ -31,11 +31,11 @@ export const PERMISSION_CATALOG = [
   { key: "promos.view", category: "Promo codes", label: "View promo codes" },
   { key: "promos.manage", category: "Promo codes", label: "Create, edit, delete promo codes" },
 
-  { key: "bookings.view", category: "Bookings", label: "View consultation bookings" },
+  { key: "bookings.view", category: "Bookings", label: "View consultation & pooja bookings" },
   {
     key: "bookings.manage",
     category: "Bookings",
-    label: "Update booking status and consultation services",
+    label: "Confirm, reschedule, refund bookings; manage consultation & pooja catalog",
   },
 
   { key: "content.view", category: "Content", label: "View CMS content" },

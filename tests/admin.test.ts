@@ -228,12 +228,22 @@ describe("bookings admin", () => {
     expect(list.data.adminBookings.total).toBe(1);
     expect(list.data.adminBookings.items[0].phone).toBe("9999999999");
 
-    const updated = await gql(
+    // Confirming has side effects (meeting link), so the generic setter refuses it…
+    const generic = await gql(
       `mutation ($id: ID!) { updateBookingStatus(id: $id, status: confirmed) { status } }`,
       { id: String(booking._id) },
       asAdmin,
     );
-    expect(updated.data.updateBookingStatus.status).toBe("confirmed");
+    expect(generic.errors?.[0]?.extensions?.code).toBe("BAD_INPUT");
+
+    // …and confirmBooking issues the link.
+    const updated = await gql(
+      `mutation ($id: ID!) { confirmBooking(id: $id) { status meetingUrl } }`,
+      { id: String(booking._id) },
+      asAdmin,
+    );
+    expect(updated.data.confirmBooking.status).toBe("confirmed");
+    expect(updated.data.confirmBooking.meetingUrl).toMatch(/^https:\/\/meet\.jit\.si\//);
   });
 });
 

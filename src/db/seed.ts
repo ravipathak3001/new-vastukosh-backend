@@ -17,7 +17,10 @@ import {
   TestimonialModel,
 } from "../modules/content/content.model.js";
 import { PromoModel } from "../modules/cart/cart.model.js";
-import { ConsultationServiceModel } from "../modules/consultation/consultation.model.js";
+import {
+  ConsultationServiceModel,
+  PoojaServiceModel,
+} from "../modules/consultation/consultation.model.js";
 import {
   DailyCardModel,
   DailyMantraModel,
@@ -44,6 +47,7 @@ import {
 import {
   collectionSeeds,
   consultationServiceSeeds,
+  poojaServiceSeeds,
   promoSeeds,
   siteSettingsSeed,
 } from "./seeds/misc.js";
@@ -81,6 +85,7 @@ async function main() {
       PromoModel.deleteMany({}),
       StoneModel.deleteMany({}),
       ConsultationServiceModel.deleteMany({}),
+      PoojaServiceModel.deleteMany({}),
       DailyMantraModel.deleteMany({}),
       DailyVerseModel.deleteMany({}),
       DailyCardModel.deleteMany({}),
@@ -101,6 +106,7 @@ async function main() {
   await upsertMany(PageModel, pageSeeds, "key");
   await upsertMany(PromoModel, promoSeeds, "code");
   await upsertMany(ConsultationServiceModel, consultationServiceSeeds, "key");
+  await upsertMany(PoojaServiceModel, poojaServiceSeeds, "slug");
   await upsertMany(DailyMantraModel, dailyMantraSeeds, "key");
   await upsertMany(DailyVerseModel, dailyVerseSeeds, "key");
   await upsertMany(DailyCardModel, dailyCardSeeds, "key");
@@ -148,6 +154,7 @@ async function main() {
     pages: await PageModel.countDocuments(),
     promos: await PromoModel.countDocuments(),
     consultationServices: await ConsultationServiceModel.countDocuments(),
+    poojaServices: await PoojaServiceModel.countDocuments(),
     dailyMantras: await DailyMantraModel.countDocuments(),
     dailyVerses: await DailyVerseModel.countDocuments(),
     dailyCards: await DailyCardModel.countDocuments(),

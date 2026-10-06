@@ -28,8 +28,9 @@ input AddressInput {
 input AdminBookingFilter {
   dateFrom: String
   dateTo: String
+  kind: BookingKind
   search: String
-  serviceKey: ConsultationServiceKey
+  serviceKey: String
   status: BookingStatus
 }
 
@@ -201,11 +202,31 @@ input BookConsultationInput {
   slot: String!
 }
 
+type BookingCheckout {
+  accessToken: String
+  booking: ConsultationBooking
+  clientData: JSON
+}
+
+type BookingHistoryEntry {
+  at: DateTime
+  note: String
+  status: BookingStatus
+}
+
+enum BookingKind {
+  consultation
+  pooja
+}
+
 enum BookingStatus {
   cancelled
   completed
   confirmed
+  pending_payment
+  refunded
   requested
+  reschedule_proposed
 }
 
 type Cart {
@@ -280,18 +301,39 @@ input ConsultationBirthDetailsInput {
   time: String
 }
 
+"""A consultation or online-pooja booking."""
 type ConsultationBooking {
+  adminNote: String
+  amount: Float
   birthDetails: ConsultationBirthDetails
+  bookingNo: String
   createdAt: DateTime
+  currency: String
   date: String
+  durationMins: Int
   email: String
+  history: [BookingHistoryEntry!]
+  holdExpiresAt: DateTime
   id: ID
+  kind: BookingKind
+  meetingProvider: String
+  meetingUrl: String
   name: String
   notes: String
+  paymentProvider: String
+  paymentStatus: String
   phone: String
-  serviceKey: ConsultationServiceKey
+  proposedDate: String
+  proposedSlot: String
+  recordingUrl: String
+  refundAmount: Float
+  refundStatus: String
+  sankalp: PoojaSankalp
+  serviceKey: String
+  serviceName: LocalizedString
   slot: String
-  status: String
+  status: BookingStatus
+  transactionId: String
   userId: ID
 }
 
@@ -347,6 +389,19 @@ type ContactSubmission {
   phone: String
   status: ContactStatus
   subject: String
+}
+
+input CreateBookingInput {
+  birthDetails: ConsultationBirthDetailsInput
+  date: String!
+  email: String!
+  kind: BookingKind!
+  name: String!
+  notes: String
+  phone: String
+  sankalp: PoojaSankalpInput
+  serviceKey: String!
+  slot: String!
 }
 
 type DailyCard {
@@ -698,11 +753,14 @@ type Mutation {
   archiveProduct(slug: String!): Product
   archiveStone(slug: String!): Stone
   assignUserRoles(roleIds: [ID!]!, userId: ID!): User
-  bookConsultation(input: BookConsultationInput!): ConsultationBooking
+  bookConsultation(input: BookConsultationInput!): ConsultationBooking @deprecated(reason: "Use createBooking, which also returns the payment payload.")
   cancelOrder(anonId: String, orderNo: String!): Order
   cancelReturn(returnNo: String!): Return
   cancelShipment(note: String, orderNo: String!): Order
   clearPromo(anonId: String): Cart
+  completeBooking(id: ID!, recordingUrl: String): ConsultationBooking
+  confirmBooking(id: ID!, note: String): ConsultationBooking
+  createBooking(input: CreateBookingInput!): BookingCheckout
   createRole(input: AdminRoleInput!): AdminRole
   deleteCollection(slug: String!): Boolean
   deleteDailyCard(key: String!): Boolean
@@ -718,7 +776,9 @@ type Mutation {
   logout(everywhere: Boolean, refreshToken: String): Boolean
   markReturnReceived(note: String, returnNo: String!): Return
   placeOrder(input: PlaceOrderInput!): PlaceOrderResult
+  proposeBookingReschedule(date: String!, id: ID!, note: String, slot: String!): ConsultationBooking
   refreshToken(refreshToken: String): AuthPayload
+  refundBooking(id: ID!, note: String): ConsultationBooking
   refundOrder(amount: Float, note: String, orderNo: String!): Order
   refundReturn(amount: Float!, returnNo: String!): Return
   rejectReturn(note: String, returnNo: String!): Return
@@ -727,8 +787,10 @@ type Mutation {
   requestPasswordReset(email: String!): Boolean
   requestReturn(items: [ReturnItemInput!]!, orderNo: String!): Return
   resetPassword(newPassword: String!, token: String!): Boolean
+  respondToBookingReschedule(accept: Boolean!, bookingNo: String!, token: String): ConsultationBooking
   restoreProduct(slug: String!): Product
   restoreStone(slug: String!): Stone
+  resumeBookingPayment(bookingNo: String!, token: String): BookingCheckout
   schedulePickup(orderNo: String!): Order
   scheduleReturnPickup(returnNo: String!): Return
   setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
@@ -755,11 +817,13 @@ type Mutation {
   upsertFaq(input: FaqInput!): Faq
   upsertLegalDoc(input: LegalDocInput!): LegalDoc
   upsertPage(input: PageInput!): Page
+  upsertPoojaService(input: PoojaServiceInput!): PoojaService
   upsertProduct(input: ProductInput!): Product
   upsertPromo(input: PromoInput!): Promo
   upsertRedirect(input: RedirectInput!): Redirect
   upsertStone(input: StoneInput!): Stone
   upsertTestimonial(input: TestimonialInput!): Testimonial
+  verifyBookingPayment(bookingNo: String!, razorpayOrderId: String!, razorpayPaymentId: String!, razorpaySignature: String!, token: String): ConsultationBooking
   verifyOrder(orderNo: String!): Order
   verifyRazorpayPayment(anonId: String, orderNo: String!, razorpayOrderId: String!, razorpayPaymentId: String!, razorpaySignature: String!): Order
 }
@@ -1098,6 +1162,49 @@ enum PlanetStrength {
   WEAK
 }
 
+type PoojaSankalp {
+  familyMembers: [String!]
+  gotra: String
+  nakshatra: String
+  purpose: String
+  rashi: String
+}
+
+input PoojaSankalpInput {
+  familyMembers: [String!]
+  gotra: String
+  nakshatra: String
+  purpose: String
+  rashi: String
+}
+
+"""
+An online pooja performed on the devotee's behalf; the recording is shared afterwards.
+"""
+type PoojaService {
+  active: Boolean
+  description: LocalizedString
+  durationMins: Int
+  icon: String
+  image: String
+  name: LocalizedString
+  order: Int
+  price: Float
+  slug: String
+}
+
+input PoojaServiceInput {
+  active: Boolean
+  description: JSON
+  durationMins: Int
+  icon: String
+  image: String
+  name: JSON
+  order: Int
+  price: Float
+  slug: String!
+}
+
 type Product {
   category: ProductCategory
   currency: String
@@ -1244,6 +1351,7 @@ type Query {
   adminOrder(orderNo: String!): Order
   adminOrders(filter: AdminOrderFilter, page: Int, pageSize: Int, sort: AdminOrderSort): AdminOrderPage
   adminPages: [Page!]
+  adminPoojaServices: [PoojaService!]
   adminProduct(slug: String!): Product
   adminProducts(filter: AdminProductFilterInput, page: Int, pageSize: Int): AdminProductPage
   adminPromos: [Promo!]
@@ -1257,7 +1365,8 @@ type Query {
   adminUser(id: ID!): User
   adminUsers(filter: AdminUserFilterInput, page: Int, pageSize: Int): AdminUserPage
   announcementBar: Announcement
-  availableSlots(date: String!): [String!]
+  availableSlots(date: String!, kind: BookingKind): [String!]
+  booking(bookingNo: String!, token: String): ConsultationBooking
   cart(anonId: String): Cart
   collection(slug: String!): Collection
   collections: [Collection!]
@@ -1295,6 +1404,7 @@ type Query {
   legalDoc(slug: String!): LegalDoc
   legalDocs: [LegalDoc!]
   me: User
+  myBookings: [ConsultationBooking!]
   myOrders: [Order!]
   myReturn(returnNo: String!): Return
   myReturns: [Return!]
@@ -1346,6 +1456,8 @@ type Query {
     timezone: String
   ): PanchangTimeline
   permissionCatalog: [PermissionInfo!]
+  poojaService(slug: String!): PoojaService
+  poojaServices: [PoojaService!]
   product(slug: String!): Product
   products(filter: ProductFilterInput, limit: Int, offset: Int, sort: ProductSort): ProductPage
   rashi(slug: String!): Rashi

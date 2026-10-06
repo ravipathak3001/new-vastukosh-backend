@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Vastukosh API — Node.js + TypeScript + MongoDB + GraphQL (Pothos code-first). Modular, client-agnostic (web + future mobile).",
+  "description": "Vastukosh API \u2014 Node.js + TypeScript + MongoDB + GraphQL (Pothos code-first). Modular, client-agnostic (web + future mobile).",
   "engines": {
     "node": ">=20"
   },
@@ -12,6 +12,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "seed": "tsx src/db/seed.ts",
+    "google:auth": "tsx src/scripts/google-auth.ts",
     "print-schema": "tsx src/graphql/print-schema.ts",
     "check-schema": "tsx src/graphql/check-schema.ts",
     "pretest": "npm run check-schema",

@@ -17,7 +17,7 @@ without touching the GraphQL schema or the order state machine:
 // src/modules/payment/payment.provider.ts
 interface PaymentProvider {
   readonly name: string;
-  createIntent(order: OrderDoc): Promise<PaymentIntent>;
+  createIntent(request: PaymentRequest): Promise<PaymentIntent>; // { amount, currency, receipt, notes }
   verifyWebhook(req: Request): WebhookResult;
   verifyCheckoutSignature(orderRef: string, paymentRef: string, signature: string): boolean;
   refund(paymentId: string, amountPaise: number | null, notes?: Record<string, string>): Promise<RefundResult>;
@@ -28,6 +28,10 @@ interface PaymentProvider {
 | -------- | ----------- | --------- |
 | `MockPaymentProvider` | `PAYMENT_PROVIDER=mock` (default; forced in tests) | `createIntent` auto-confirms, `refund` auto-succeeds — used for local dev and the whole test suite, no network calls |
 | `RazorpayPaymentProvider` | `PAYMENT_PROVIDER=razorpay` | Real Razorpay Orders + Refunds API + signature verification (this doc) |
+
+The same provider and webhook also take payment for **consultation and online
+pooja bookings**. The webhook resolves the gateway order id against bookings
+first, then orders. See [BOOKINGS.md](BOOKINGS.md).
 
 `getPaymentProvider()` caches one instance per process based on `env.PAYMENT_PROVIDER`.
 

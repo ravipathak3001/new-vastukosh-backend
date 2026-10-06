@@ -235,8 +235,10 @@ Auth scope: **public** = no token; **user** = valid access token; **admin** =
 | `redirects` | Redirect rules | — | public |
 | `cart` | Current cart + totals | `anonId` (guest) | public/user |
 | `myOrders` / `order` | Order history / one order | `orderNo` | user |
-| `consultationServices` | Bookable services | — | public |
-| `availableSlots` | Free slots for a date | `date` (yyyy-mm-dd) | public |
+| `consultationServices` / `poojaServices` | Bookable consultations / online poojas | — | public |
+| `availableSlots` | Free slots for a date | `date` (yyyy-mm-dd), `kind` (`consultation`\|`pooja`) | public |
+| `booking` | One booking (§10.1) | `bookingNo, token` | public (token) / user (owner) |
+| `myBookings` | Signed-in user's bookings | — | user |
 | **`panchang`** | **Today's (or `date`'s) Hindu almanac** | `date, latitude, longitude, timezone, monthSystem` | public |
 
 ### Mutations
@@ -251,7 +253,10 @@ Auth scope: **public** = no token; **user** = valid access token; **admin** =
 | `applyPromo` / `clearPromo` | Promo codes | public/user |
 | `placeOrder` | Create an order; returns `clientData` for the payment step | public/user |
 | `cancelOrder` | Cancel while cancellable | user |
-| `bookConsultation` | Book an astrology/vastu/gem session | public |
+| `createBooking` | Book a consultation or pooja; returns `accessToken` + payment `clientData` (§10.1) | public |
+| `verifyBookingPayment` / `resumeBookingPayment` | Confirm / reopen a booking's Razorpay payment | public (token) |
+| `respondToBookingReschedule` | Accept (→ confirmed) or decline (→ refunded) a proposed new time | public (token) |
+| `bookConsultation` | *Deprecated* — use `createBooking` | public |
 | `subscribeNewsletter` / `submitContactForm` | Marketing | public |
 | `upsertProduct` / `archiveProduct` / `advanceOrderStatus` | Catalog & order admin | admin |
 
@@ -328,6 +333,27 @@ open the Razorpay checkout SDK; on success the backend is notified via a
 server-to-server webhook (`POST /webhooks/razorpay`, HMAC-verified). **Switching
 providers does not change the schema**, so build against `placeOrder` /
 `clientData` and treat `clientData` as an opaque provider payload.
+
+### 10.1 Consultation & pooja bookings
+
+`createBooking(input: { kind, serviceKey, date, slot, name, email, … })`
+returns `BookingCheckout { booking, clientData, accessToken }`. Store the
+`accessToken` with the booking number: it is how a guest views or acts on
+the booking later (`booking(bookingNo, token)`). Owners who are signed in don't
+need it.
+
+The slot is held for 15 minutes while the customer pays. Open the Razorpay
+SDK with `clientData` (`keyId`, `razorpayOrderId`, `amount`), then call
+`verifyBookingPayment` with the three ids from its success callback. If the
+customer closes the sheet, `resumeBookingPayment` returns the same
+`clientData` for a retry while the hold lasts. Clients without a native SDK
+can open
+`{SITE_URL}/{locale}/bookings/{bookingNo}?t={accessToken}&pay=1`, which starts
+Checkout immediately; refetch `booking` when the app comes back to the
+foreground. Once the team confirms, a consultation's `meetingUrl` is set
+(Google Meet). A pooja's `recordingUrl` is set when it is complete. If the
+team proposes a new time (`status: reschedule_proposed`, `proposedDate/Slot`),
+call `respondToBookingReschedule`. Full lifecycle: [BOOKINGS.md](BOOKINGS.md).
 
 ---
 

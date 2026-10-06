@@ -142,7 +142,13 @@ export async function placeOrder(
       timeline: [{ status: "pending_payment", at: new Date(), note: "Order created" }],
     });
     if (!isCod) {
-      intent = await provider.createIntent(order);
+      intent = await provider.createIntent({
+        amount: order.total,
+        currency: order.currency || "INR",
+        receipt: order.orderNo,
+        notes: { orderNo: order.orderNo },
+      });
+      intent.clientData = { ...intent.clientData, orderNo: order.orderNo };
       order.payment.providerRef = intent.ref;
     }
   } catch (err) {

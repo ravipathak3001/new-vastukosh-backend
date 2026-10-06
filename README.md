@@ -31,6 +31,10 @@ for the frontend's codegen and any other client.
 > the Razorpay integration, why payment confirmation has to be an atomic
 > write, local test-key setup, and the go-live checklist.
 
+> **Consultations & online pooja?** See [`docs/BOOKINGS.md`](docs/BOOKINGS.md) —
+> the paid booking lifecycle, reschedule/refund rules, and the one-time
+> Google Meet setup (`npm run google:auth`).
+
 ## Getting started
 
 ```bash

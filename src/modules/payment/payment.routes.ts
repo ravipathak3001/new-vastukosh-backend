@@ -3,6 +3,11 @@ import { logger } from "../../config/logger.js";
 import { getPaymentProvider } from "./payment.provider.js";
 import { markOrderFailed, markOrderPaid, syncOrderRefundStatus } from "../order/order.service.js";
 import { syncReturnRefundStatus } from "../returns/return.service.js";
+import {
+  markBookingFailed,
+  markBookingPaid,
+  syncBookingRefundStatus,
+} from "../consultation/consultation.service.js";
 
 export const paymentRouter = Router();
 
@@ -28,16 +33,23 @@ paymentRouter.post(
     }
 
     if (result.kind === "payment") {
+      // The gateway order id belongs to either a consultation/pooja booking
+      // or a shop order — bookings are checked first, then orders.
       if (result.event === "captured") {
-        await markOrderPaid(result.providerRef, result.paymentId);
+        const isBooking = await markBookingPaid(result.providerRef, result.paymentId);
+        if (!isBooking) await markOrderPaid(result.providerRef, result.paymentId);
       } else {
-        await markOrderFailed(result.providerRef);
+        const isBooking = await markBookingFailed(result.providerRef);
+        if (!isBooking) await markOrderFailed(result.providerRef);
       }
     } else {
-      // A refund can belong to either a direct order refund or a return's
-      // refund — try the order first, then the return.
-      const matchedOrder = await syncOrderRefundStatus(result.refundId, result.event);
-      if (!matchedOrder) await syncReturnRefundStatus(result.refundId, result.event);
+      // A refund can belong to a direct order refund, a return's refund or a
+      // booking refund — try each in turn.
+      const matched =
+        (await syncOrderRefundStatus(result.refundId, result.event)) ||
+        (await syncReturnRefundStatus(result.refundId, result.event)) ||
+        (await syncBookingRefundStatus(result.refundId, result.event));
+      if (!matched) logger.warn({ refundId: result.refundId }, "Refund webhook matched nothing");
     }
     res.json({ received: true });
   },

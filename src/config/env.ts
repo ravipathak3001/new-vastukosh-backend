@@ -56,6 +56,19 @@ const schema = z.object({
   EMAIL_FROM: z.string().default("Vastukosh <no-reply@vastukosh.com>"),
   PASSWORD_RESET_TTL: z.string().default("1h"),
 
+  // Consultation / pooja bookings. Slots are wall-clock times in this zone.
+  BOOKING_TIMEZONE: z.string().min(1).default("Asia/Kolkata"),
+  // How long an unpaid booking holds its slot while the customer pays.
+  BOOKING_HOLD_MINUTES: z.coerce.number().int().positive().default(15),
+
+  // Video meetings created when an admin confirms a consultation. `mock`
+  // issues a working Jitsi room link so the flow is testable without Google.
+  MEETING_PROVIDER: z.enum(["mock", "google"]).default("mock"),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REFRESH_TOKEN: z.string().optional(),
+  GOOGLE_CALENDAR_ID: z.string().min(1).default("primary"),
+
   SITE_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_REVALIDATE_URL: z.string().url().optional(),
   REVALIDATE_SECRET: z.string().optional(),

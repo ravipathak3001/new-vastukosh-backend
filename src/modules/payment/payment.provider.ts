@@ -2,7 +2,18 @@ import crypto from "node:crypto";
 import type { Request } from "express";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
-import type { OrderDoc } from "../order/order.model.js";
+/**
+ * What a gateway needs to open a charge. Kept independent of any one domain
+ * model so shop orders and consultation/pooja bookings share the same gateway.
+ */
+export type PaymentRequest = {
+  /** Amount in rupees (the provider converts to the gateway's smallest unit). */
+  amount: number;
+  currency: string;
+  /** Our own human-readable reference (order no / booking no) shown on the gateway dashboard. */
+  receipt: string;
+  notes?: Record<string, string>;
+};
 
 export type PaymentIntent = {
   /** Opaque reference the client uses to complete payment (order id, gateway order id, …). */
@@ -30,7 +41,7 @@ export type RefundResult = {
  */
 export interface PaymentProvider {
   readonly name: string;
-  createIntent(order: OrderDoc): Promise<PaymentIntent>;
+  createIntent(request: PaymentRequest): Promise<PaymentIntent>;
   verifyWebhook(req: Request): WebhookResult;
   /**
    * Verifies the signature the client SDK's success handler returns, so a
@@ -46,11 +57,11 @@ export interface PaymentProvider {
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = "mock";
 
-  async createIntent(order: OrderDoc): Promise<PaymentIntent> {
+  async createIntent(request: PaymentRequest): Promise<PaymentIntent> {
     return {
-      ref: `mock_${order.orderNo}`,
+      ref: `mock_${request.receipt}`,
       autoConfirm: true,
-      clientData: { provider: "mock", amount: order.total, currency: order.currency },
+      clientData: { provider: "mock", amount: request.amount, currency: request.currency },
     };
   }
 
@@ -79,7 +90,7 @@ const RAZORPAY_BASE_URL = "https://api.razorpay.com/v1";
 export class RazorpayPaymentProvider implements PaymentProvider {
   readonly name = "razorpay";
 
-  async createIntent(order: OrderDoc): Promise<PaymentIntent> {
+  async createIntent(request: PaymentRequest): Promise<PaymentIntent> {
     if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
       throw new Error("Razorpay is selected but RAZORPAY_KEY_ID/SECRET are not set");
     }
@@ -91,10 +102,10 @@ export class RazorpayPaymentProvider implements PaymentProvider {
       headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
       body: JSON.stringify({
         // Razorpay wants the amount in the smallest currency unit (paise).
-        amount: Math.round(order.total * 100),
-        currency: order.currency || "INR",
-        receipt: order.orderNo,
-        notes: { orderNo: order.orderNo },
+        amount: Math.round(request.amount * 100),
+        currency: request.currency || "INR",
+        receipt: request.receipt,
+        notes: request.notes ?? {},
       }),
     });
     const body = await res.json().catch(() => ({}));
@@ -111,7 +122,6 @@ export class RazorpayPaymentProvider implements PaymentProvider {
         razorpayOrderId: data.id,
         amount: data.amount,
         currency: data.currency,
-        orderNo: order.orderNo,
       },
     };
   }

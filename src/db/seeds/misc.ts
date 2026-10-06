@@ -35,6 +35,82 @@ export const consultationServiceSeeds = [
   },
 ];
 
+/** Online poojas performed on the devotee's behalf (recording shared afterwards). */
+export const poojaServiceSeeds = [
+  {
+    slug: "rudrabhishek",
+    name: { en: "Rudrabhishek", hi: "रुद्राभिषेक" },
+    description: {
+      en: "Sacred abhishek of Lord Shiva with Rudri path, for health, peace and removal of obstacles.",
+      hi: "रुद्री पाठ सहित भगवान शिव का पवित्र अभिषेक — स्वास्थ्य, शांति और बाधा निवारण हेतु।",
+    },
+    durationMins: 90,
+    price: 2100,
+    icon: "water_drop",
+    order: 1,
+  },
+  {
+    slug: "satyanarayan-katha",
+    name: { en: "Satyanarayan Katha", hi: "सत्यनारायण कथा" },
+    description: {
+      en: "Katha and puja of Lord Satyanarayan for prosperity, gratitude and family well-being.",
+      hi: "समृद्धि, कृतज्ञता और पारिवारिक कल्याण हेतु भगवान सत्यनारायण की कथा एवं पूजा।",
+    },
+    durationMins: 120,
+    price: 1100,
+    icon: "auto_stories",
+    order: 2,
+  },
+  {
+    slug: "navgraha-shanti",
+    name: { en: "Navgraha Shanti Puja", hi: "नवग्रह शांति पूजा" },
+    description: {
+      en: "Propitiation of the nine planets to ease malefic influences in your birth chart.",
+      hi: "जन्म कुंडली के अशुभ ग्रह प्रभावों को शांत करने हेतु नवग्रहों की पूजा।",
+    },
+    durationMins: 120,
+    price: 3100,
+    icon: "public",
+    order: 3,
+  },
+  {
+    slug: "lakshmi-puja",
+    name: { en: "Lakshmi Puja", hi: "लक्ष्मी पूजा" },
+    description: {
+      en: "Worship of Maa Lakshmi for wealth, abundance and success in business.",
+      hi: "धन, समृद्धि और व्यापार में सफलता हेतु माँ लक्ष्मी की पूजा।",
+    },
+    durationMins: 60,
+    price: 1500,
+    icon: "currency_rupee",
+    order: 4,
+  },
+  {
+    slug: "maha-mrityunjaya-jaap",
+    name: { en: "Maha Mrityunjaya Jaap", hi: "महामृत्युंजय जाप" },
+    description: {
+      en: "1,25,000 chants of the Maha Mrityunjaya mantra (by a team of pandits) for longevity and protection.",
+      hi: "दीर्घायु और रक्षा हेतु महामृत्युंजय मंत्र का सवा लाख जाप (पंडितों द्वारा)।",
+    },
+    durationMins: 180,
+    price: 5100,
+    icon: "self_improvement",
+    order: 5,
+  },
+  {
+    slug: "ganesh-puja",
+    name: { en: "Ganesh Puja", hi: "गणेश पूजा" },
+    description: {
+      en: "Worship of Lord Ganesha for auspicious beginnings and removal of obstacles.",
+      hi: "शुभ आरंभ और विघ्न निवारण हेतु भगवान गणेश की पूजा।",
+    },
+    durationMins: 60,
+    price: 1100,
+    icon: "temple_hindu",
+    order: 6,
+  },
+];
+
 export const collectionSeeds = [
   {
     slug: "new-home",

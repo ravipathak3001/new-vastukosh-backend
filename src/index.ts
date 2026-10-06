@@ -6,6 +6,8 @@ import { createApp } from "./app.js";
 import { getPaymentProvider } from "./modules/payment/payment.provider.js";
 import { getShippingProvider } from "./modules/shipping/shipping.provider.js";
 import { startShippingAutomation, stopShippingAutomation } from "./modules/shipping/shipping-automation.job.js";
+import { startBookingJobs, stopBookingJobs } from "./modules/consultation/booking.job.js";
+import { getMeetingProvider } from "./modules/consultation/meeting.provider.js";
 import { ensureSuperAdminRole } from "./modules/roles/role.service.js";
 
 async function main() {
@@ -13,7 +15,11 @@ async function main() {
   await ensureSuperAdminRole();
   getPaymentProvider(); // log which provider is active at boot
   getShippingProvider();
-  if (!isTest) startShippingAutomation();
+  getMeetingProvider();
+  if (!isTest) {
+    startShippingAutomation();
+    startBookingJobs();
+  }
 
   // Create the bare server first so Apollo's drain plugin can hook it.
   const server = createServer();
@@ -30,6 +36,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutting down");
     stopShippingAutomation();
+    stopBookingJobs();
     await apollo.stop(); // runs the drain plugin
     await disconnectDb();
     process.exit(0);
