@@ -785,9 +785,24 @@ export async function listServicesForAdmin(): Promise<ConsultationServiceDoc[]> 
   return ConsultationServiceModel.find().sort({ order: 1 });
 }
 
+/** Fee and duration sanity checks shared by both admin catalogs. */
+function assertFeeAndDuration(input: Record<string, unknown>) {
+  const { price, durationMins } = input;
+  if (price != null && (typeof price !== "number" || !Number.isFinite(price) || price < 0)) {
+    throw badInput("Fee must be zero or more");
+  }
+  if (
+    durationMins != null &&
+    (typeof durationMins !== "number" || !Number.isInteger(durationMins) || durationMins <= 0)
+  ) {
+    throw badInput("Duration must be a whole number of minutes");
+  }
+}
+
 export async function upsertConsultationService(
   input: { key: string } & Record<string, unknown>,
 ): Promise<ConsultationServiceDoc> {
+  assertFeeAndDuration(input);
   const doc = await ConsultationServiceModel.findOneAndUpdate(
     { key: input.key },
     { $set: input },
@@ -804,6 +819,7 @@ export async function listPoojasForAdmin(): Promise<PoojaServiceDoc[]> {
 export async function upsertPoojaService(
   input: { slug: string } & Record<string, unknown>,
 ): Promise<PoojaServiceDoc> {
+  assertFeeAndDuration(input);
   const slug = input.slug.trim().toLowerCase();
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
     throw badInput("Slug must be lowercase letters, numbers and dashes");
