@@ -225,7 +225,7 @@ export function registerSeoModule() {
         if (page) {
           return resolveSeo(page.seo, {
             path: clean,
-            title: { en: "Vastukosh", hi: "वास्तुकोष" },
+            title: { en: "Vastukosh", hi: "वास्तुकोश" },
             description: { en: "", hi: "" },
           });
         }

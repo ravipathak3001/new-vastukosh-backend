@@ -106,3 +106,30 @@ export function sendRecordingReady(b: ConsultationBookingDoc) {
      <p><a href="${esc(b.recordingUrl)}">${esc(b.recordingUrl)}</a></p>`,
   );
 }
+
+/** To the expert: a customer has booked (and paid for) a session with them. */
+export async function sendExpertNewBooking(b: ConsultationBookingDoc, expertEmail: string) {
+  const panelUrl = `${env.SITE_URL}/en/expert/bookings`;
+  const details =
+    b.kind === "pooja"
+      ? `<p>Sankalp: ${esc(b.name)}${b.sankalp?.gotra ? `, gotra ${esc(b.sankalp.gotra)}` : ""}</p>`
+      : b.notes
+        ? `<p>Their question: <i>${esc(b.notes)}</i></p>`
+        : "";
+  try {
+    await getEmailProvider().send(
+      expertEmail,
+      `New booking — ${serviceLabel(b)} on ${b.date} ${b.slot}`,
+      `<div style="font-family:Georgia,serif;max-width:560px;margin:auto;color:#2b1d0e">
+  <h2 style="color:#8a3b12">You have a new booking</h2>
+  <p><b>${esc(serviceLabel(b))}</b> on <b>${when(b.date, b.slot)}</b> for ${esc(b.name)}.</p>
+  ${details}
+  <p>Please confirm it (or propose another time) from your expert panel.</p>
+  <p style="margin-top:24px"><a href="${panelUrl}" style="background:#8a3b12;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open expert panel</a></p>
+  <p style="color:#7a6a58;font-size:13px">Booking reference: ${esc(b.bookingNo ?? "")}</p>
+</div>`,
+    );
+  } catch (err) {
+    logger.error({ err, bookingNo: b.bookingNo }, "Expert booking email failed");
+  }
+}

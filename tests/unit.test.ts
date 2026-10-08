@@ -28,7 +28,7 @@ describe("resolveSeo", () => {
   it("fills every field from fallbacks and appends the brand", () => {
     const seo = resolveSeo(undefined, fallback);
     expect(seo.title.en).toBe("Widget · Vastukosh");
-    expect(seo.title.hi).toContain("वास्तुकोष");
+    expect(seo.title.hi).toContain("वास्तुकोश");
     expect(seo.canonicalPath).toBe("/shop/x");
     expect(seo.ogImage).toBe("/x.jpg");
     expect(seo.noindex).toBe(false);

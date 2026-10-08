@@ -21,12 +21,26 @@ import {
   type PoojaServiceDoc,
 } from "./consultation.model.js";
 import { getMeetingProvider } from "./meeting.provider.js";
+import { daysBetween, localDateTime, nowInZone, slotMinutes } from "./booking-time.js";
+import {
+  addReview,
+  computeSplit,
+  creditBookingEarning,
+  expertAvailableSlots,
+  expertHasClash,
+  getActiveOffering,
+  expertEmail,
+  getExpertBySlug,
+  reverseBookingEarning,
+} from "../expert/expert.service.js";
+import { ExpertProfileModel } from "../expert/expert.model.js";
 import {
   sendBookingConfirmed,
   sendBookingReceived,
   sendBookingRefunded,
   sendRecordingReady,
   sendRescheduleProposed,
+  sendExpertNewBooking,
 } from "./booking.emails.js";
 
 /** Consultation slots per working day (closed Sundays). */
@@ -83,45 +97,6 @@ async function resolveService(kind: BookingKind, key: string) {
   return { name: s.name, durationMins: s.durationMins, price: s.price };
 }
 
-// ─── Time helpers (all slots are wall-clock times in BOOKING_TIMEZONE) ───
-
-/** Current date (`yyyy-mm-dd`) and minutes-since-midnight in the booking time zone. */
-function nowInZone(): { date: string; minutes: number } {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: env.BOOKING_TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(new Date())
-      .map((p) => [p.type, p.value]),
-  );
-  return {
-    date: `${parts.year}-${parts.month}-${parts.day}`,
-    minutes: Number(parts.hour) * 60 + Number(parts.minute),
-  };
-}
-
-function slotMinutes(slot: string): number {
-  const [h = 0, m = 0] = slot.split(":").map(Number);
-  return h * 60 + m;
-}
-
-/** `yyyy-mm-ddTHH:mm:00` for `date slot` shifted by `addMins` — calendar arithmetic only, no zone conversion. */
-export function localDateTime(date: string, slot: string, addMins = 0): string {
-  const [y = 0, mo = 1, d = 1] = date.split("-").map(Number);
-  const [h = 0, mi = 0] = slot.split(":").map(Number);
-  return new Date(Date.UTC(y, mo - 1, d, h, mi + addMins)).toISOString().slice(0, 19);
-}
-
-function daysBetween(from: string, to: string): number {
-  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
-}
-
 // ─── Slots ────────────────────────────────────────────────────────────────
 
 function slotsFor(kind: BookingKind): readonly string[] {
@@ -149,6 +124,8 @@ export async function availableSlots(
 
   const holders = await ConsultationBookingModel.find({
     kind,
+    // Expert bookings live on that expert's own calendar, not the platform grid.
+    expertId: null,
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
     $or: [
       { date, status: { $in: ["requested", "confirmed"] } },
@@ -185,6 +162,8 @@ export type CreateBookingInput = {
     purpose?: string;
   };
   notes?: string;
+  /** Book this expert (marketplace) at their price; omit for a platform booking. */
+  expertSlug?: string;
 };
 
 export type BookingCheckout = {
@@ -211,10 +190,34 @@ export async function createBooking(
   if (!name) throw badInput("Name is required");
   if (!EMAIL.test(email)) throw badInput("A valid email is required");
 
-  const service = await resolveService(input.kind, input.serviceKey);
-  const free = await availableSlots(input.date, input.kind);
-  if (!free.includes(input.slot)) {
-    throw badInput("That slot is no longer available — please pick another");
+  const catalog = await resolveService(input.kind, input.serviceKey);
+  let service = catalog;
+  let expertFields: Record<string, unknown> = {};
+
+  if (input.expertSlug) {
+    // Marketplace booking: the expert's own price, duration and calendar.
+    const expert = await getExpertBySlug(input.expertSlug);
+    if (!expert) throw badInput("This expert isn't taking bookings right now");
+    const offering = await getActiveOffering(expert._id, input.kind, input.serviceKey);
+    if (!offering) throw badInput("This expert doesn't offer that service");
+    const free = await expertAvailableSlots(expert, input.date, offering.durationMins);
+    if (!free.includes(input.slot)) {
+      throw badInput("That slot is no longer available — please pick another");
+    }
+    service = { name: catalog.name, durationMins: offering.durationMins, price: offering.price };
+    const split = await computeSplit(offering.price, expert);
+    expertFields = {
+      expertId: expert._id,
+      offeringId: offering._id,
+      panditCount: offering.panditCount,
+      samagriIncluded: offering.samagriIncluded,
+      ...split,
+    };
+  } else {
+    const free = await availableSlots(input.date, input.kind);
+    if (!free.includes(input.slot)) {
+      throw badInput("That slot is no longer available — please pick another");
+    }
   }
 
   const isFree = service.price <= 0;
@@ -253,28 +256,37 @@ export async function createBooking(
     accessToken,
     history: [historyEntry(status, isFree ? "Booked (no payment required)" : "Awaiting payment")],
     userId: opts.userId ?? null,
+    ...expertFields,
   });
 
   // Two customers can pass the availability check for the same slot at the
   // same moment. The earliest-created holder wins; later ones back out.
-  const contenders = await ConsultationBookingModel.find({
-    kind: input.kind,
-    date: input.date,
-    slot: input.slot,
-    $or: [
-      { status: { $in: ["requested", "confirmed"] } },
-      { status: "pending_payment", holdExpiresAt: { $gt: new Date() } },
-    ],
-  })
-    .sort({ _id: 1 })
-    .select("_id");
-  if (contenders.length > 1 && String(contenders[0]!._id) !== String(booking._id)) {
+  let lost = false;
+  if (booking.expertId) {
+    lost = await expertHasClash(booking);
+  } else {
+    const contenders = await ConsultationBookingModel.find({
+      kind: input.kind,
+      expertId: null,
+      date: input.date,
+      slot: input.slot,
+      $or: [
+        { status: { $in: ["requested", "confirmed"] } },
+        { status: "pending_payment", holdExpiresAt: { $gt: new Date() } },
+      ],
+    })
+      .sort({ _id: 1 })
+      .select("_id");
+    lost = contenders.length > 1 && String(contenders[0]!._id) !== String(booking._id);
+  }
+  if (lost) {
     await ConsultationBookingModel.deleteOne({ _id: booking._id });
     throw badInput("That slot is no longer available — please pick another");
   }
 
   if (isFree) {
     void sendBookingReceived(booking);
+    if (booking.expertId) void notifyExpertOfBooking(booking);
     return { booking, clientData: {}, accessToken };
   }
 
@@ -351,6 +363,7 @@ async function confirmBookingPaid(
   if (updated) {
     if (late) logger.warn({ bookingNo: updated.bookingNo }, "Booking paid after hold expired");
     void sendBookingReceived(updated);
+    if (updated.expertId) void notifyExpertOfBooking(updated);
   }
   return updated;
 }
@@ -548,9 +561,13 @@ async function finishConfirm(
       // Previously confirmed then rescheduled — move the existing event.
       await provider.rescheduleMeeting(b.meeting.eventId, start, end, env.BOOKING_TIMEZONE);
     } else {
+      const expert = b.expertId ? await ExpertProfileModel.findById(b.expertId) : null;
+      const expertMail = b.expertId ? await expertEmail(b.expertId) : null;
       const meeting = await provider.createMeeting({
         requestId: `${b.bookingNo ?? b._id}-${b.date}-${b.slot.replace(":", "")}`,
-        summary: `Vastukosh — ${b.serviceName?.en ?? b.serviceKey} with ${b.name}`,
+        summary: `Vastukosh — ${b.serviceName?.en ?? b.serviceKey}: ${b.name}${
+          expert ? ` with ${expert.displayName}` : ""
+        }`,
         description: [
           `Booking ${b.bookingNo ?? ""}`,
           b.phone ? `Phone: ${b.phone}` : "",
@@ -564,7 +581,7 @@ async function finishConfirm(
         start,
         end,
         timeZone: env.BOOKING_TIMEZONE,
-        attendeeEmail: b.email,
+        attendeeEmails: [b.email, ...(expertMail ? [expertMail] : [])],
       });
       createdEventId = meeting.eventId;
       set.meeting = meeting;
@@ -609,7 +626,10 @@ export async function proposeReschedule(
   }
   if (date === b.date && slot === b.slot) throw badInput("Pick a different date or time");
   const kind = (b.kind ?? "consultation") as BookingKind;
-  const free = await availableSlots(date, kind, String(b._id));
+  const expert = b.expertId ? await ExpertProfileModel.findById(b.expertId) : null;
+  const free = expert
+    ? await expertAvailableSlots(expert, date, b.durationMins || 60, String(b._id))
+    : await availableSlots(date, kind, String(b._id));
   if (!free.includes(slot)) throw badInput("That slot isn't available");
 
   const updated = await ConsultationBookingModel.findOneAndUpdate(
@@ -647,12 +667,15 @@ export async function completeBooking(
   const newRecording = Boolean(url) && url !== b.recordingUrl;
   if (b.status === "completed" && !newRecording) return b;
 
+  const firstCompletion = b.status !== "completed";
   b.status = "completed";
   if (url) b.recordingUrl = url;
   b.history.push(
     historyEntry("completed", newRecording ? "Completed — recording shared" : "Completed"),
   );
   await b.save();
+  // The expert's share becomes withdrawable once the session is done.
+  if (firstCompletion) await creditBookingEarning(b);
   if (newRecording) void sendRecordingReady(b);
   return b;
 }
@@ -707,6 +730,8 @@ async function refundBookingDoc(
     throw err;
   }
   await cancelMeeting();
+  // A refund after completion takes back the expert's already-credited share.
+  await reverseBookingEarning(claimed);
   void sendBookingRefunded(claimed);
   return claimed;
 }
@@ -838,4 +863,101 @@ export async function upsertPoojaService(
   );
   void notifyFrontendRevalidate(["pooja-services"]);
   return doc;
+}
+
+// ─── Marketplace: experts acting on their own bookings ────────────────────
+
+async function notifyExpertOfBooking(b: ConsultationBookingDoc) {
+  const email = b.expertId ? await expertEmail(b.expertId) : null;
+  if (email) await sendExpertNewBooking(b, email);
+}
+
+/** Loads a booking only if it belongs to this expert. */
+async function loadForExpert(expertId: string, bookingNo: string): Promise<ConsultationBookingDoc> {
+  const b = await ConsultationBookingModel.findOne({ bookingNo, expertId });
+  if (!b) throw notFound("Booking");
+  return b;
+}
+
+export type ExpertBookingScope = "action" | "upcoming" | "past";
+
+export async function listExpertBookings(
+  expertId: string,
+  scope: ExpertBookingScope,
+): Promise<ConsultationBookingDoc[]> {
+  const today = nowInZone().date;
+  if (scope === "action") {
+    // Needs the expert: confirm new paid bookings, or awaiting the customer's reply.
+    return ConsultationBookingModel.find({ expertId, status: { $in: ["requested", "reschedule_proposed"] } }).sort({
+      date: 1,
+      slot: 1,
+    });
+  }
+  if (scope === "upcoming") {
+    return ConsultationBookingModel.find({ expertId, status: "confirmed", date: { $gte: today } }).sort({
+      date: 1,
+      slot: 1,
+    });
+  }
+  return ConsultationBookingModel.find({
+    expertId,
+    $or: [
+      { status: { $in: ["completed", "refunded", "cancelled"] } },
+      { status: "confirmed", date: { $lt: today } },
+    ],
+  })
+    .sort({ date: -1, slot: -1 })
+    .limit(200);
+}
+
+export async function expertConfirmBooking(expertId: string, bookingNo: string, note = "") {
+  const b = await loadForExpert(expertId, bookingNo);
+  return confirmBooking(String(b._id), note || "Confirmed by expert");
+}
+
+export async function expertProposeReschedule(
+  expertId: string,
+  bookingNo: string,
+  date: string,
+  slot: string,
+  note = "",
+) {
+  const b = await loadForExpert(expertId, bookingNo);
+  return proposeReschedule(String(b._id), date, slot, note);
+}
+
+export async function expertCompleteBooking(expertId: string, bookingNo: string, recordingUrl?: string | null) {
+  const b = await loadForExpert(expertId, bookingNo);
+  if (b.status === "confirmed" && b.date > nowInZone().date) {
+    throw badInput("You can mark it completed on or after the session date");
+  }
+  return completeBooking(String(b._id), recordingUrl);
+}
+
+/** Admin: give a platform (no-expert) booking to an expert; their split is fixed from the booking amount. */
+export async function assignBookingExpert(id: string, expertId: string) {
+  const b = await getBookingForAdmin(id);
+  if (b.expertId) throw badInput("This booking already has an expert");
+  if (!["requested", "confirmed", "reschedule_proposed"].includes(b.status)) {
+    throw badInput(`Cannot assign an expert to a booking that is ${b.status}`);
+  }
+  const expert = await ExpertProfileModel.findById(expertId);
+  if (!expert || expert.status !== "approved") throw badInput("Choose an approved expert");
+  const split = await computeSplit(b.amount, expert);
+  b.set({ expertId: expert._id, ...split });
+  b.history.push(historyEntry(b.status, `Assigned to ${expert.displayName}`));
+  await b.save();
+  void notifyExpertOfBooking(b);
+  return b;
+}
+
+/** Customer rates the expert after a completed booking. */
+export async function submitExpertReview(
+  bookingNo: string,
+  access: BookingAccess,
+  rating: number,
+  comment: string,
+) {
+  const b = await loadForCustomer(bookingNo, access);
+  return addReview(b, rating, comment);
 }

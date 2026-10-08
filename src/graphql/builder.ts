@@ -22,6 +22,8 @@ export const builder = new SchemaBuilder<{
   AuthScopes: {
     loggedIn: boolean;
     admin: boolean;
+    /** Has an expert profile (any status — the panel works while pending approval). */
+    expert: boolean;
     permission: string;
   };
 }>({
@@ -33,9 +35,11 @@ export const builder = new SchemaBuilder<{
     ZodPlugin,
   ],
   scopeAuth: {
-    authScopes: (ctx) => ({
+    authScopes: async (ctx) => ({
       loggedIn: ctx.user != null,
       admin: ctx.user?.roles.includes("admin") ?? false,
+      // Profile lookup (memoised per request), not the token role — see `Context.expertId`.
+      expert: (await ctx.expertId()) != null,
       permission: (perm: string) => ctx.user?.permissions.includes(perm) ?? false,
     }),
     // Without this, a failed `authScopes` check surfaces as a plain `Error`

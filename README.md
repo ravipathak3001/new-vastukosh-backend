@@ -35,6 +35,10 @@ for the frontend's codegen and any other client.
 > the paid booking lifecycle, reschedule/refund rules, and the one-time
 > Google Meet setup (`npm run google:auth`).
 
+> **Expert marketplace?** See [`docs/EXPERTS.md`](docs/EXPERTS.md) — pandit /
+> astrologer self-registration, per-expert fees and hours, commission, wallet
+> ledger and manual cashouts.
+
 ## Getting started
 
 ```bash

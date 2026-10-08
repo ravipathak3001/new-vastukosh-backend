@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../../config/env.js";
 
-export type Role = "customer" | "admin";
+/** `expert` = has an expert (pandit / astrologer / Vastu) profile — see `modules/expert`. */
+export type Role = "customer" | "admin" | "expert";
 
 export type AccessTokenPayload = {
   sub: string;

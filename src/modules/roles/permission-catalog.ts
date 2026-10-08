@@ -38,6 +38,14 @@ export const PERMISSION_CATALOG = [
     label: "Confirm, reschedule, refund bookings; manage consultation & pooja catalog",
   },
 
+  { key: "experts.view", category: "Experts", label: "View experts, their profiles, wallets and reviews" },
+  {
+    key: "experts.manage",
+    category: "Experts",
+    label: "Approve / suspend experts, set commission and marketplace settings",
+  },
+  { key: "payouts.manage", category: "Experts", label: "Pay, reject and adjust expert cashouts" },
+
   { key: "content.view", category: "Content", label: "View CMS content" },
   {
     key: "content.manage",

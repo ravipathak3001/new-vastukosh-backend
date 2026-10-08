@@ -11,7 +11,8 @@ export type MeetingRequest = {
   start: string;
   end: string;
   timeZone: string;
-  attendeeEmail: string;
+  /** Invited to the event (customer, and the expert for marketplace bookings). */
+  attendeeEmails: string[];
 };
 
 export type Meeting = {
@@ -130,7 +131,7 @@ export class GoogleMeetingProvider implements MeetingProvider {
         description: req.description,
         start: { dateTime: req.start, timeZone: req.timeZone },
         end: { dateTime: req.end, timeZone: req.timeZone },
-        attendees: [{ email: req.attendeeEmail }],
+        attendees: req.attendeeEmails.map((email) => ({ email })),
         conferenceData: {
           createRequest: {
             requestId: req.requestId,

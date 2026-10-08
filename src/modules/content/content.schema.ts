@@ -79,7 +79,7 @@ export const PageRef = builder.objectRef<PageDoc>("Page").implement({
       resolve: (p) =>
         resolveSeo(p.seo, {
           path: p.path,
-          title: { en: "Vastukosh", hi: "वास्तुकोष" },
+          title: { en: "Vastukosh", hi: "वास्तुकोश" },
           description: { en: "", hi: "" },
         }),
     }),

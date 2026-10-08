@@ -18,6 +18,7 @@ import {
 } from "./auth.model.js";
 import { CartModel } from "../cart/cart.model.js";
 import { computeUserPermissions } from "../roles/role.service.js";
+import type { Role } from "../../shared/auth/jwt.js";
 import { getEmailProvider } from "../email/email.provider.js";
 
 const referralSuffix = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
@@ -38,7 +39,7 @@ async function issueTokens(
 ): Promise<IssuedTokens> {
   const accessToken = signAccessToken({
     sub: String(user._id),
-    roles: user.roles as ("customer" | "admin")[],
+    roles: user.roles as Role[],
     permissions: await computeUserPermissions(user),
   });
   const { token, tokenHash } = generateRefreshToken();

@@ -18,6 +18,8 @@ import { registerReturnModule } from "../modules/returns/return.schema.js";
 import { registerReturnAdminModule } from "../modules/returns/return.admin.schema.js";
 import { registerConsultationModule } from "../modules/consultation/consultation.schema.js";
 import { registerConsultationAdminModule } from "../modules/consultation/consultation.admin.schema.js";
+import { registerExpertModule } from "../modules/expert/expert.schema.js";
+import { registerExpertAdminModule } from "../modules/expert/expert.admin.schema.js";
 import { registerMarketingModule } from "../modules/marketing/marketing.schema.js";
 import { registerMarketingAdminModule } from "../modules/marketing/marketing.admin.schema.js";
 import { registerPanchangModule } from "../modules/panchang/panchang.schema.js";
@@ -53,6 +55,8 @@ export function buildSchema() {
   registerReturnAdminModule();
   registerConsultationModule();
   registerConsultationAdminModule();
+  registerExpertModule();
+  registerExpertAdminModule();
   registerMarketingModule();
   registerMarketingAdminModule();
   registerPanchangModule();

@@ -1,6 +1,8 @@
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
 import type { Context } from "../../graphql/context.js";
+import { ExpertProfileRef } from "../expert/expert.refs.js";
+import { ExpertProfileModel } from "../expert/expert.model.js";
 import {
   BOOKING_KINDS,
   BOOKING_STATUSES,
@@ -100,6 +102,10 @@ const BookingHistoryRef = builder.objectRef<HistoryEntry>("BookingHistoryEntry")
   }),
 });
 
+/** Booking detail guard: staff with `bookings.view`, or the expert assigned to this booking. */
+const staffOrAssignedExpert = async (b: ConsultationBookingDoc, _a: unknown, ctx: Context) =>
+  b.expertId && (await ctx.expertId()) === String(b.expertId) ? true : { permission: "bookings.view" };
+
 export const ConsultationBookingRef = builder
   .objectRef<ConsultationBookingDoc>("ConsultationBooking")
   .implement({
@@ -147,8 +153,25 @@ export const ConsultationBookingRef = builder
       /** Message from the team (e.g. why a reschedule was proposed). */
       adminNote: t.string({ nullable: true, resolve: (b) => b.adminNote || null }),
       createdAt: t.field({ type: "DateTime", resolve: (b) => (b as any).createdAt }),
-      phone: t.exposeString("phone", { authScopes: { permission: "bookings.view" } }),
-      notes: t.exposeString("notes", { authScopes: { permission: "bookings.view" } }),
+      /** The expert performing it (marketplace bookings); null = platform booking. */
+      expert: t.field({
+        type: ExpertProfileRef,
+        nullable: true,
+        resolve: (b) => (b.expertId ? ExpertProfileModel.findById(b.expertId).exec() : null),
+      }),
+      panditCount: t.int({ resolve: (b) => b.panditCount ?? 1 }),
+      samagriIncluded: t.boolean({ resolve: (b) => b.samagriIncluded ?? false }),
+      reviewed: t.boolean({ resolve: (b) => b.reviewed ?? false }),
+      commissionPct: t.float({
+        nullable: true,
+        authScopes: staffOrAssignedExpert,
+        resolve: (b) => b.commissionPct ?? null,
+      }),
+      platformFee: t.float({ authScopes: staffOrAssignedExpert, resolve: (b) => b.platformFee ?? 0 }),
+      /** The expert's share — credited to their wallet when the booking is completed. */
+      expertEarning: t.float({ authScopes: staffOrAssignedExpert, resolve: (b) => b.expertEarning ?? 0 }),
+      phone: t.exposeString("phone", { authScopes: staffOrAssignedExpert }),
+      notes: t.exposeString("notes", { authScopes: staffOrAssignedExpert }),
       userId: t.field({
         type: "ID",
         nullable: true,
@@ -158,13 +181,13 @@ export const ConsultationBookingRef = builder
       birthDetails: t.field({
         type: ConsultationBirthDetailsRef,
         nullable: true,
-        authScopes: { permission: "bookings.view" },
+        authScopes: staffOrAssignedExpert,
         resolve: (b) => b.birthDetails ?? null,
       }),
       sankalp: t.field({
         type: PoojaSankalpRef,
         nullable: true,
-        authScopes: { permission: "bookings.view" },
+        authScopes: staffOrAssignedExpert,
         resolve: (b) => (b.kind === "pooja" ? b.sankalp ?? null : null),
       }),
       paymentProvider: t.string({
@@ -232,6 +255,8 @@ const CreateBookingInputRef = builder.inputType("CreateBookingInput", {
     birthDetails: t.field({ type: BirthDetailsInput, required: false }),
     sankalp: t.field({ type: SankalpInput, required: false }),
     notes: t.string({ required: false }),
+    /** Book a specific expert at their price; omit for a platform booking. */
+    expertSlug: t.string({ required: false }),
   }),
 });
 
@@ -329,6 +354,7 @@ export function registerConsultationModule() {
               }
             : undefined,
           notes: input.notes ?? undefined,
+          expertSlug: input.expertSlug ?? undefined,
         };
         return createBooking(payload, { userId: ctx.user?.id, locale: ctx.locale });
       },

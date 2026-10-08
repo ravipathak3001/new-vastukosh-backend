@@ -63,6 +63,11 @@ type AdminDashboardStats {
   revenueTotal: Float
 }
 
+type AdminExpertPayout {
+  expert: Expert
+  payout: ExpertPayout
+}
+
 input AdminOrderFilter {
   dateFrom: String
   dateTo: String
@@ -307,11 +312,14 @@ type ConsultationBooking {
   amount: Float
   birthDetails: ConsultationBirthDetails
   bookingNo: String
+  commissionPct: Float
   createdAt: DateTime
   currency: String
   date: String
   durationMins: Int
   email: String
+  expert: Expert
+  expertEarning: Float
   history: [BookingHistoryEntry!]
   holdExpiresAt: DateTime
   id: ID
@@ -320,14 +328,18 @@ type ConsultationBooking {
   meetingUrl: String
   name: String
   notes: String
+  panditCount: Int
   paymentProvider: String
   paymentStatus: String
   phone: String
+  platformFee: Float
   proposedDate: String
   proposedSlot: String
   recordingUrl: String
   refundAmount: Float
   refundStatus: String
+  reviewed: Boolean
+  samagriIncluded: Boolean
   sankalp: PoojaSankalp
   serviceKey: String
   serviceName: LocalizedString
@@ -395,6 +407,7 @@ input CreateBookingInput {
   birthDetails: ConsultationBirthDetailsInput
   date: String!
   email: String!
+  expertSlug: String
   kind: BookingKind!
   name: String!
   notes: String
@@ -483,6 +496,229 @@ input DailyVerseInput {
 A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the `date-time` format outlined in section 5.6 of the RFC 3339 profile of the ISO 8601 standard for representation of dates and times using the Gregorian calendar.
 """
 scalar DateTime
+
+"""A pandit / astrologer / Vastu or gemstone expert on the marketplace."""
+type Expert {
+  availability: [ExpertAvailabilityWindow!]
+  bio: String
+  certificates: [ExpertCertificate!]
+  city: String
+  commissionPct: Float
+  completedCount: Int
+  createdAt: DateTime
+  daysOff: [String!]
+  displayName: String
+  email: String
+  experienceYears: Int
+  headline: String
+  id: ID
+  kyc: ExpertKyc
+  languages: [String!]
+  lifetimeEarnings: Float
+  offerings: [ExpertOffering!]
+  phone: String
+  photoUrl: String
+  ratingAvg: Float
+  ratingCount: Int
+  slug: String
+  specialities: [ExpertSpeciality!]
+  state: String
+  status: ExpertStatus
+  statusNote: String
+  title: String
+  unavailableDates: [String!]
+  walletBalance: Float
+  workingDays: [Int!]
+}
+
+type ExpertAvailabilityWindow {
+  """0 = Sunday … 6 = Saturday"""
+  day: Int
+  end: String
+  start: String
+}
+
+input ExpertAvailabilityWindowInput {
+  day: Int!
+  end: String!
+  start: String!
+}
+
+enum ExpertBookingScope {
+  action
+  past
+  upcoming
+}
+
+type ExpertCertificate {
+  issuer: String
+  title: String
+  url: String
+  year: Int
+}
+
+input ExpertCertificateInput {
+  issuer: String
+  title: String!
+  url: String
+  year: Int
+}
+
+type ExpertDashboard {
+  awaitingConfirmationCount: Int
+  commissionPct: Float
+  lifetimeEarnings: Float
+  minPayout: Float
+  monthEarnings: Float
+  pendingPayout: Float
+  profile: Expert
+  upcomingCount: Int
+  walletBalance: Float
+}
+
+input ExpertFilter {
+  language: String
+  search: String
+
+  """Consultation key or pooja slug"""
+  serviceKey: String
+  sort: ExpertSort
+  speciality: ExpertSpeciality
+}
+
+type ExpertKyc {
+  bankAccountName: String
+  bankAccountNumber: String
+  bankIfsc: String
+  idLast4: String
+  idType: String
+  legalName: String
+  panNumber: String
+  payoutReady: Boolean
+  upiId: String
+}
+
+input ExpertKycInput {
+  bankAccountName: String
+  bankAccountNumber: String
+  bankIfsc: String
+  idLast4: String
+  idType: String
+  legalName: String
+  panNumber: String
+  upiId: String
+}
+
+type ExpertLedgerEntry {
+  amount: Float
+  balanceAfter: Float
+  createdAt: DateTime
+  id: ID
+  note: String
+  type: ExpertLedgerType
+}
+
+enum ExpertLedgerType {
+  adjustment
+  booking_credit
+  booking_reversal
+  payout_hold
+  payout_release
+}
+
+type ExpertOffering {
+  active: Boolean
+  durationMins: Int
+  id: ID
+  kind: String
+  notes: String
+  panditCount: Int
+  price: Float
+  samagriIncluded: Boolean
+  serviceKey: String
+  serviceName: LocalizedString
+}
+
+input ExpertOfferingInput {
+  active: Boolean
+  durationMins: Int!
+
+  """`consultation` or `pooja`"""
+  kind: String!
+  notes: String
+  panditCount: Int
+  price: Float!
+  samagriIncluded: Boolean
+  serviceKey: String!
+}
+
+type ExpertPage {
+  items: [Expert!]
+  total: Int
+}
+
+type ExpertPayout {
+  adminNote: String
+  amount: Float
+  createdAt: DateTime
+  destination: String
+  id: ID
+  method: String
+  payoutNo: String
+  processedAt: DateTime
+  reference: String
+  status: ExpertPayoutStatus
+}
+
+enum ExpertPayoutStatus {
+  paid
+  rejected
+  requested
+}
+
+input ExpertProfileInput {
+  bio: String
+  certificates: [ExpertCertificateInput!]
+  city: String
+  displayName: String
+  experienceYears: Int
+  headline: String
+  languages: [String!]
+  phone: String
+  photoUrl: String
+  specialities: [ExpertSpeciality!]
+  state: String
+  title: String
+}
+
+type ExpertReview {
+  authorName: String
+  comment: String
+  createdAt: DateTime
+  id: ID
+  rating: Int
+}
+
+enum ExpertSort {
+  experience
+  price_high
+  price_low
+  rating
+}
+
+enum ExpertSpeciality {
+  astro
+  gem
+  pooja
+  vastu
+}
+
+enum ExpertStatus {
+  approved
+  pending
+  rejected
+  suspended
+}
 
 type Faq {
   answer: LocalizedString
@@ -744,14 +980,22 @@ input LoginInput {
   password: String!
 }
 
+type MarketplaceSettings {
+  commissionPct: Float
+  minPayout: Float
+}
+
 type Mutation {
   addAddress(input: AddressInput!): User
   addToCart(anonId: String, productSlug: String!, qty: Int): Cart
+  adjustExpertWallet(amount: Float!, id: ID!, note: String!): Expert
   advanceOrderStatus(note: String, orderNo: String!, status: OrderStatus!): Order
+  applyAsExpert(input: ExpertProfileInput!): Expert
   applyPromo(anonId: String, code: String!): Cart
   approveReturn(note: String, returnNo: String!): Return
   archiveProduct(slug: String!): Product
   archiveStone(slug: String!): Stone
+  assignBookingExpert(expertId: ID!, id: ID!): ConsultationBooking
   assignUserRoles(roleIds: [ID!]!, userId: ID!): User
   bookConsultation(input: BookConsultationInput!): ConsultationBooking @deprecated(reason: "Use createBooking, which also returns the payment payload.")
   cancelOrder(anonId: String, orderNo: String!): Order
@@ -768,12 +1012,17 @@ type Mutation {
   deleteDailyVerse(key: String!): Boolean
   deleteFaq(id: ID!): Boolean
   deleteLegalDoc(slug: String!): Boolean
+  deleteMyOffering(id: ID!): Boolean
   deletePromo(code: String!): Boolean
   deleteRedirect(from: String!): Boolean
   deleteRole(id: ID!): Boolean
   deleteTestimonial(id: ID!): Boolean
+  expertCompleteBooking(bookingNo: String!, recordingUrl: String): ConsultationBooking
+  expertConfirmBooking(bookingNo: String!, note: String): ConsultationBooking
+  expertProposeReschedule(bookingNo: String!, date: String!, note: String, slot: String!): ConsultationBooking
   login(input: LoginInput!): AuthPayload
   logout(everywhere: Boolean, refreshToken: String): Boolean
+  markPayoutPaid(id: ID!, note: String, reference: String!): ExpertPayout
   markReturnReceived(note: String, returnNo: String!): Return
   placeOrder(input: PlaceOrderInput!): PlaceOrderResult
   proposeBookingReschedule(date: String!, id: ID!, note: String, slot: String!): ConsultationBooking
@@ -781,10 +1030,12 @@ type Mutation {
   refundBooking(id: ID!, note: String): ConsultationBooking
   refundOrder(amount: Float, note: String, orderNo: String!): Order
   refundReturn(amount: Float!, returnNo: String!): Return
+  rejectPayout(id: ID!, note: String!): ExpertPayout
   rejectReturn(note: String, returnNo: String!): Return
   removeAddress(addressId: ID!): User
   removeFromCart(anonId: String, productSlug: String!): Cart
   requestPasswordReset(email: String!): Boolean
+  requestPayout(amount: Float!): ExpertPayout
   requestReturn(items: [ReturnItemInput!]!, orderNo: String!): Return
   resetPassword(newPassword: String!, token: String!): Boolean
   respondToBookingReschedule(accept: Boolean!, bookingNo: String!, token: String): ConsultationBooking
@@ -795,15 +1046,23 @@ type Mutation {
   scheduleReturnPickup(returnNo: String!): Return
   setBirthDetails(date: String!, place: String, rashiSlug: String, time: String): User
   setCartItemQty(anonId: String, productSlug: String!, qty: Int!): Cart
+  setExpertCommission(commissionPct: Float, id: ID!): Expert
+  setExpertReviewHidden(hidden: Boolean!, id: ID!): ExpertReview
+  setExpertStatus(id: ID!, note: String, status: ExpertStatus!): Expert
+  setMyAvailability(daysOff: [String!]!, windows: [ExpertAvailabilityWindowInput!]!): Expert
   setUserRoles(roles: [Role!]!, userId: ID!): User
   signup(input: SignupInput!): AuthPayload
   startDelivery(orderNo: String!): Order
   submitContactForm(input: ContactInput!): MutationOk
+  submitExpertReview(bookingNo: String!, comment: String, rating: Int!, token: String): ConsultationBooking
   subscribeNewsletter(email: String!, source: String): MutationOk
   updateAddress(addressId: ID!, input: AddressInput!): User
   updateAnnouncementBar(input: AnnouncementInput!): Announcement
   updateBookingStatus(id: ID!, status: BookingStatus!): ConsultationBooking
   updateContactStatus(id: ID!, status: ContactStatus!): ContactSubmission
+  updateMarketplaceSettings(commissionPct: Float, minPayout: Float): MarketplaceSettings
+  updateMyExpertKyc(input: ExpertKycInput!): Expert
+  updateMyExpertProfile(input: ExpertProfileInput!): Expert
   updateProfile(localePref: String, name: String, phone: String): User
   updateRole(id: ID!, name: String, permissions: [String!]): AdminRole
   updateShippingAutomationSettings(input: ShippingAutomationSettingsInput!): ShippingAutomationSettings
@@ -816,6 +1075,7 @@ type Mutation {
   upsertDailyVerse(input: DailyVerseInput!): DailyVerse
   upsertFaq(input: FaqInput!): Faq
   upsertLegalDoc(input: LegalDocInput!): LegalDoc
+  upsertMyOffering(input: ExpertOfferingInput!): ExpertOffering
   upsertPage(input: PageInput!): Page
   upsertPoojaService(input: PoojaServiceInput!): PoojaService
   upsertProduct(input: ProductInput!): Product
@@ -1345,12 +1605,18 @@ type Query {
   adminDailyMantras: [DailyMantra!]
   adminDailyVerses: [DailyVerse!]
   adminDashboard: AdminDashboardStats
+  adminExpert(id: ID!): Expert
+  adminExpertLedger(id: ID!): [ExpertLedgerEntry!]
+  adminExpertPayoutsFor(id: ID!): [ExpertPayout!]
+  adminExpertReviews(id: ID!): [ExpertReview!]
+  adminExperts(search: String, status: ExpertStatus): [Expert!]
   adminFaqs: [Faq!]
   adminLegalDocs: [LegalDoc!]
   adminNewsletterSubscribers(filter: AdminSubscriberFilterInput, page: Int, pageSize: Int): AdminSubscriberPage
   adminOrder(orderNo: String!): Order
   adminOrders(filter: AdminOrderFilter, page: Int, pageSize: Int, sort: AdminOrderSort): AdminOrderPage
   adminPages: [Page!]
+  adminPayouts(status: ExpertPayoutStatus): [AdminExpertPayout!]
   adminPoojaServices: [PoojaService!]
   adminProduct(slug: String!): Product
   adminProducts(filter: AdminProductFilterInput, page: Int, pageSize: Int): AdminProductPage
@@ -1374,6 +1640,10 @@ type Query {
   dailyCards(limit: Int): [DailyCard!]
   dailyMantra: DailyMantra
   dailyVerse: DailyVerse
+  expert(slug: String!): Expert
+  expertReviews(limit: Int, slug: String!): [ExpertReview!]
+  expertSlots(date: String!, kind: String!, serviceKey: String!, slug: String!): [String!]
+  experts(filter: ExpertFilter, limit: Int, offset: Int): ExpertPage
   faqs: [Faq!]
   featuredProducts(limit: Int): [Product!]
 
@@ -1403,8 +1673,14 @@ type Query {
   ): KundaliRecommendation
   legalDoc(slug: String!): LegalDoc
   legalDocs: [LegalDoc!]
+  marketplaceSettings: MarketplaceSettings
   me: User
   myBookings: [ConsultationBooking!]
+  myExpertBookings(scope: ExpertBookingScope!): [ConsultationBooking!]
+  myExpertDashboard: ExpertDashboard
+  myExpertLedger: [ExpertLedgerEntry!]
+  myExpertPayouts: [ExpertPayout!]
+  myExpertProfile: Expert
   myOrders: [Order!]
   myReturn(returnNo: String!): Return
   myReturns: [Return!]
@@ -1575,6 +1851,7 @@ type ReturnTimelineEntry {
 enum Role {
   admin
   customer
+  expert
 }
 
 input SeoMetaInput {

@@ -153,10 +153,27 @@ const bookingSchema = new Schema(
     /** Lets guests manage their booking from the emailed link without an account. */
     accessToken: { type: String, default: "" },
     userId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+
+    /**
+     * Marketplace: the expert performing this booking. `null` = a platform
+     * booking (priced from the catalog) that an admin may assign later.
+     */
+    expertId: { type: Schema.Types.ObjectId, ref: "ExpertProfile", default: null, index: true },
+    offeringId: { type: Schema.Types.ObjectId, ref: "ExpertOffering", default: null },
+    /** Pooja: pandits performing it, as offered at booking time. */
+    panditCount: { type: Number, default: 1 },
+    samagriIncluded: { type: Boolean, default: false },
+    /** Split fixed when the expert is attached, so later commission changes don't rewrite history. */
+    commissionPct: { type: Number, default: null },
+    platformFee: { type: Number, default: 0 },
+    expertEarning: { type: Number, default: 0 },
+    /** Set once the customer has reviewed the expert for this booking. */
+    reviewed: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 bookingSchema.index({ kind: 1, date: 1, slot: 1 });
+bookingSchema.index({ expertId: 1, date: 1 });
 bookingSchema.index({ kind: 1, proposedDate: 1 });
 
 export type ConsultationBooking = InferSchemaType<typeof bookingSchema>;

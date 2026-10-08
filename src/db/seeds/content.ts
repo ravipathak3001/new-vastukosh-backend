@@ -157,7 +157,7 @@ export const legalSeeds = [
         heading: { en: "Overview", hi: "सिंहावलोकन" },
         body: {
           en: `This Privacy Policy explains how Vastukosh ("we", "us", "our") collects, uses, shares and protects your personal information when you use vastukosh.com or our mobile app, place an order, or book a consultation with our team. It applies to every visitor, registered user and customer, and it should be read together with our Terms of Service, Shipping & Delivery Policy and Return & Refund Policy. By using our services you agree to the practices described below.`,
-          hi: `यह गोपनीयता नीति बताती है कि वास्तुकोष ("हम", "हमें", "हमारा") आपकी व्यक्तिगत जानकारी को कैसे एकत्र, उपयोग, साझा और सुरक्षित करता है, जब आप vastukosh.com या हमारे मोबाइल ऐप का उपयोग करते हैं, कोई ऑर्डर देते हैं, या हमारी टीम से परामर्श बुक करते हैं। यह नीति हर आगंतुक, पंजीकृत उपयोगकर्ता और ग्राहक पर लागू होती है, और इसे हमारी सेवा की शर्तें, शिपिंग और डिलीवरी नीति तथा रिटर्न और धनवापसी नीति के साथ पढ़ा जाना चाहिए। हमारी सेवाओं का उपयोग करके, आप नीचे बताई गई प्रक्रियाओं से सहमत होते हैं।`,
+          hi: `यह गोपनीयता नीति बताती है कि वास्तुकोश ("हम", "हमें", "हमारा") आपकी व्यक्तिगत जानकारी को कैसे एकत्र, उपयोग, साझा और सुरक्षित करता है, जब आप vastukosh.com या हमारे मोबाइल ऐप का उपयोग करते हैं, कोई ऑर्डर देते हैं, या हमारी टीम से परामर्श बुक करते हैं। यह नीति हर आगंतुक, पंजीकृत उपयोगकर्ता और ग्राहक पर लागू होती है, और इसे हमारी सेवा की शर्तें, शिपिंग और डिलीवरी नीति तथा रिटर्न और धनवापसी नीति के साथ पढ़ा जाना चाहिए। हमारी सेवाओं का उपयोग करके, आप नीचे बताई गई प्रक्रियाओं से सहमत होते हैं।`,
         },
       },
       {
@@ -233,7 +233,7 @@ export const legalSeeds = [
         heading: { en: "Acceptance of terms", hi: "शर्तों की स्वीकृति" },
         body: {
           en: `These Terms of Service ("Terms") govern your access to and use of vastukosh.com, our mobile app and the products and consultations Vastukosh ("we", "us") offers. By creating an account, placing an order or booking a consultation, you agree to be bound by these Terms, our Privacy Policy, Shipping & Delivery Policy and Return & Refund Policy. If you do not agree, please do not use our services.`,
-          hi: `ये सेवा की शर्तें ("शर्तें") vastukosh.com, हमारे मोबाइल ऐप, तथा वास्तुकोष ("हम") द्वारा प्रस्तुत उत्पादों और परामर्श तक आपकी पहुँच व उनके उपयोग को नियंत्रित करती हैं। खाता बनाकर, ऑर्डर देकर या परामर्श बुक करके, आप इन शर्तों, हमारी गोपनीयता नीति, शिपिंग और डिलीवरी नीति तथा रिटर्न और धनवापसी नीति से बाध्य होने के लिए सहमत होते हैं। यदि आप सहमत नहीं हैं, तो कृपया हमारी सेवाओं का उपयोग न करें।`,
+          hi: `ये सेवा की शर्तें ("शर्तें") vastukosh.com, हमारे मोबाइल ऐप, तथा वास्तुकोश ("हम") द्वारा प्रस्तुत उत्पादों और परामर्श तक आपकी पहुँच व उनके उपयोग को नियंत्रित करती हैं। खाता बनाकर, ऑर्डर देकर या परामर्श बुक करके, आप इन शर्तों, हमारी गोपनीयता नीति, शिपिंग और डिलीवरी नीति तथा रिटर्न और धनवापसी नीति से बाध्य होने के लिए सहमत होते हैं। यदि आप सहमत नहीं हैं, तो कृपया हमारी सेवाओं का उपयोग न करें।`,
         },
       },
       {
@@ -247,7 +247,7 @@ export const legalSeeds = [
         heading: { en: "Our products and their nature", hi: "हमारे उत्पाद और उनकी प्रकृति" },
         body: {
           en: `Vastukosh sells bracelets, gemstones, yantras, malas and related items, many of which are ritually consecrated ("Prana Pratishtha") by our in-house priests as part of order fulfilment. This consecration follows traditional Vedic practice; its spiritual effects are a matter of faith and tradition and are not scientifically verifiable or guaranteed by us. Product descriptions, astrological guidance, gemstone recommendations and kundali or panchang readings on our site or app are offered for informational and spiritual guidance only and are not a substitute for professional medical, legal, financial or psychological advice — please consult an appropriately qualified professional for such matters.`,
-          hi: `वास्तुकोष ब्रेसलेट, रत्न, यंत्र, माला और संबंधित वस्तुएँ बेचता है, जिनमें से कई को ऑर्डर पूर्ति के भाग के रूप में हमारे स्वयं के पुरोहितों द्वारा अनुष्ठानिक रूप से प्राण-प्रतिष्ठित किया जाता है। यह प्राण-प्रतिष्ठा पारंपरिक वैदिक प्रथा का पालन करती है; इसके आध्यात्मिक प्रभाव आस्था और परंपरा का विषय हैं तथा हमारे द्वारा वैज्ञानिक रूप से सत्यापन योग्य या गारंटीकृत नहीं हैं। हमारी साइट या ऐप पर उत्पाद विवरण, ज्योतिषीय मार्गदर्शन, रत्न सुझाव तथा कुंडली या पंचांग विवेचन केवल सूचनात्मक और आध्यात्मिक मार्गदर्शन हेतु प्रस्तुत किए जाते हैं और पेशेवर चिकित्सा, कानूनी, वित्तीय या मनोवैज्ञानिक सलाह का विकल्प नहीं हैं — ऐसे विषयों के लिए कृपया उपयुक्त योग्य पेशेवर से परामर्श करें।`,
+          hi: `वास्तुकोश ब्रेसलेट, रत्न, यंत्र, माला और संबंधित वस्तुएँ बेचता है, जिनमें से कई को ऑर्डर पूर्ति के भाग के रूप में हमारे स्वयं के पुरोहितों द्वारा अनुष्ठानिक रूप से प्राण-प्रतिष्ठित किया जाता है। यह प्राण-प्रतिष्ठा पारंपरिक वैदिक प्रथा का पालन करती है; इसके आध्यात्मिक प्रभाव आस्था और परंपरा का विषय हैं तथा हमारे द्वारा वैज्ञानिक रूप से सत्यापन योग्य या गारंटीकृत नहीं हैं। हमारी साइट या ऐप पर उत्पाद विवरण, ज्योतिषीय मार्गदर्शन, रत्न सुझाव तथा कुंडली या पंचांग विवेचन केवल सूचनात्मक और आध्यात्मिक मार्गदर्शन हेतु प्रस्तुत किए जाते हैं और पेशेवर चिकित्सा, कानूनी, वित्तीय या मनोवैज्ञानिक सलाह का विकल्प नहीं हैं — ऐसे विषयों के लिए कृपया उपयुक्त योग्य पेशेवर से परामर्श करें।`,
         },
       },
       {
@@ -275,14 +275,14 @@ export const legalSeeds = [
         heading: { en: "Intellectual property", hi: "बौद्धिक संपदा" },
         body: {
           en: `All content on vastukosh.com and our app — including text, graphics, logos, product photography, bead and gemstone illustrations, and software — is owned by Vastukosh or its licensors and is protected by copyright and trademark law. You may view and use this content for personal, non-commercial purposes only; you may not copy, reproduce, republish or create derivative works from it without our prior written permission.`,
-          hi: `vastukosh.com और हमारे ऐप पर मौजूद सभी सामग्री — जिसमें टेक्स्ट, ग्राफ़िक्स, लोगो, उत्पाद फ़ोटोग्राफ़ी, बीड और रत्न चित्रण, तथा सॉफ़्टवेयर शामिल हैं — वास्तुकोष या उसके लाइसेंसदाताओं के स्वामित्व में है और कॉपीराइट व ट्रेडमार्क कानून द्वारा संरक्षित है। आप इस सामग्री को केवल व्यक्तिगत, गैर-वाणिज्यिक उद्देश्यों के लिए देख और उपयोग कर सकते हैं; हमारी पूर्व लिखित अनुमति के बिना आप इसे कॉपी, पुनरुत्पादित, पुनः प्रकाशित या इससे व्युत्पन्न कार्य नहीं बना सकते।`,
+          hi: `vastukosh.com और हमारे ऐप पर मौजूद सभी सामग्री — जिसमें टेक्स्ट, ग्राफ़िक्स, लोगो, उत्पाद फ़ोटोग्राफ़ी, बीड और रत्न चित्रण, तथा सॉफ़्टवेयर शामिल हैं — वास्तुकोश या उसके लाइसेंसदाताओं के स्वामित्व में है और कॉपीराइट व ट्रेडमार्क कानून द्वारा संरक्षित है। आप इस सामग्री को केवल व्यक्तिगत, गैर-वाणिज्यिक उद्देश्यों के लिए देख और उपयोग कर सकते हैं; हमारी पूर्व लिखित अनुमति के बिना आप इसे कॉपी, पुनरुत्पादित, पुनः प्रकाशित या इससे व्युत्पन्न कार्य नहीं बना सकते।`,
         },
       },
       {
         heading: { en: "Acceptable use and reviews", hi: "स्वीकार्य उपयोग और समीक्षाएँ" },
         body: {
           en: `You agree not to misuse our site or app — including attempting unauthorised access, submitting fraudulent orders, scraping content, or harassing our staff or consultants. If you submit a review, testimonial or other content, you confirm it is honest and your own, and you grant Vastukosh a non-exclusive, royalty-free licence to display it on our site, app and marketing. We may remove content that is false, abusive or violates these Terms.`,
-          hi: `आप हमारी साइट या ऐप का दुरुपयोग न करने के लिए सहमत होते हैं — जिसमें अनधिकृत पहुँच का प्रयास करना, धोखाधड़ी वाले ऑर्डर देना, सामग्री को स्क्रैप करना, या हमारे कर्मचारियों या सलाहकारों को परेशान करना शामिल है। यदि आप कोई समीक्षा, प्रशंसापत्र या अन्य सामग्री प्रस्तुत करते हैं, तो आप पुष्टि करते हैं कि यह ईमानदार और आपकी अपनी है, और आप वास्तुकोष को इसे हमारी साइट, ऐप और मार्केटिंग में प्रदर्शित करने का एक गैर-अनन्य, रॉयल्टी-मुक्त लाइसेंस प्रदान करते हैं। हम ऐसी सामग्री हटा सकते हैं जो असत्य, अपमानजनक हो या इन शर्तों का उल्लंघन करती हो।`,
+          hi: `आप हमारी साइट या ऐप का दुरुपयोग न करने के लिए सहमत होते हैं — जिसमें अनधिकृत पहुँच का प्रयास करना, धोखाधड़ी वाले ऑर्डर देना, सामग्री को स्क्रैप करना, या हमारे कर्मचारियों या सलाहकारों को परेशान करना शामिल है। यदि आप कोई समीक्षा, प्रशंसापत्र या अन्य सामग्री प्रस्तुत करते हैं, तो आप पुष्टि करते हैं कि यह ईमानदार और आपकी अपनी है, और आप वास्तुकोश को इसे हमारी साइट, ऐप और मार्केटिंग में प्रदर्शित करने का एक गैर-अनन्य, रॉयल्टी-मुक्त लाइसेंस प्रदान करते हैं। हम ऐसी सामग्री हटा सकते हैं जो असत्य, अपमानजनक हो या इन शर्तों का उल्लंघन करती हो।`,
         },
       },
       {
@@ -296,7 +296,7 @@ export const legalSeeds = [
         heading: { en: "Limitation of liability", hi: "दायित्व की सीमा" },
         body: {
           en: `Our services and products are provided on an "as is" and "as available" basis. To the maximum extent permitted by law, Vastukosh is not liable for indirect, incidental or consequential loss, for delivery delays caused by our courier partners or events beyond our reasonable control, or for outcomes attributed to astrological, vastu or gemstone guidance. Nothing in these Terms limits any liability that cannot lawfully be excluded under Indian law, including under the Consumer Protection Act, 2019.`,
-          hi: `हमारी सेवाएँ और उत्पाद "जैसी हैं" और "जैसी उपलब्ध हैं" के आधार पर प्रदान किए जाते हैं। कानून द्वारा अनुमत अधिकतम सीमा तक, वास्तुकोष अप्रत्यक्ष, आकस्मिक या परिणामी हानि के लिए, हमारे कूरियर साझेदारों या हमारे उचित नियंत्रण से बाहर की घटनाओं के कारण डिलीवरी में देरी के लिए, या ज्योतिषीय, वास्तु या रत्न मार्गदर्शन से जुड़े परिणामों के लिए उत्तरदायी नहीं है। इन शर्तों में कुछ भी उस दायित्व को सीमित नहीं करता जिसे भारतीय कानून, जिसमें उपभोक्ता संरक्षण अधिनियम, 2019 शामिल है, के तहत वैध रूप से बाहर नहीं रखा जा सकता।`,
+          hi: `हमारी सेवाएँ और उत्पाद "जैसी हैं" और "जैसी उपलब्ध हैं" के आधार पर प्रदान किए जाते हैं। कानून द्वारा अनुमत अधिकतम सीमा तक, वास्तुकोश अप्रत्यक्ष, आकस्मिक या परिणामी हानि के लिए, हमारे कूरियर साझेदारों या हमारे उचित नियंत्रण से बाहर की घटनाओं के कारण डिलीवरी में देरी के लिए, या ज्योतिषीय, वास्तु या रत्न मार्गदर्शन से जुड़े परिणामों के लिए उत्तरदायी नहीं है। इन शर्तों में कुछ भी उस दायित्व को सीमित नहीं करता जिसे भारतीय कानून, जिसमें उपभोक्ता संरक्षण अधिनियम, 2019 शामिल है, के तहत वैध रूप से बाहर नहीं रखा जा सकता।`,
         },
       },
       {
@@ -485,7 +485,7 @@ export const pageSeeds: {
     key: "home",
     path: "/",
     seo: {
-      metaTitle: { en: "Vastukosh — Astrology & Vastu Shastra", hi: "वास्तुकोष — ज्योतिष और वास्तु शास्त्र" },
+      metaTitle: { en: "Vastukosh — Astrology & Vastu Shastra", hi: "वास्तुकोश — ज्योतिष और वास्तु शास्त्र" },
       metaDescription: {
         en: "Discover harmony through ancient Vastu principles and astrological guidance. Consecrated idols, yantras, malas and expert consultations.",
         hi: "प्राचीन वास्तु सिद्धांतों और ज्योतिषीय मार्गदर्शन से सामंजस्य पाएँ। प्राण-प्रतिष्ठित मूर्तियाँ, यंत्र, मालाएँ और विशेषज्ञ परामर्श।",
@@ -532,7 +532,7 @@ export const pageSeeds: {
       metaTitle: { en: "Contact Us", hi: "संपर्क करें" },
       metaDescription: {
         en: "Reach the Vastukosh sanctuary for guidance, orders and consultations.",
-        hi: "मार्गदर्शन, ऑर्डर और परामर्श के लिए वास्तुकोष से संपर्क करें।",
+        hi: "मार्गदर्शन, ऑर्डर और परामर्श के लिए वास्तुकोश से संपर्क करें।",
       },
     },
   },
@@ -543,7 +543,7 @@ export const pageSeeds: {
       metaTitle: { en: "Stories from Seekers", hi: "साधकों की कहानियाँ" },
       metaDescription: {
         en: "Real reflections from families and individuals who walked their path with Vastukosh.",
-        hi: "उन परिवारों और व्यक्तियों के वास्तविक विचार जिन्होंने वास्तुकोष के साथ अपना पथ चला।",
+        hi: "उन परिवारों और व्यक्तियों के वास्तविक विचार जिन्होंने वास्तुकोश के साथ अपना पथ चला।",
       },
     },
   },

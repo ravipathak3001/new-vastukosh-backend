@@ -1,7 +1,7 @@
 import { Schema, type InferSchemaType, type HydratedDocument } from "mongoose";
 import { defineModel } from "../../shared/mongo.js";
 
-export const ROLES = ["customer", "admin"] as const;
+export const ROLES = ["customer", "admin", "expert"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const addressSchema = new Schema(

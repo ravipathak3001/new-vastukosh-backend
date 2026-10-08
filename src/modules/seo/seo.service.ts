@@ -1,7 +1,7 @@
 import type { LocalizedString } from "../../shared/localized.js";
 import type { ResolvedSeo, SeoMeta } from "./seo.model.js";
 
-const BRAND_SUFFIX: LocalizedString = { en: " · Vastukosh", hi: " · वास्तुकोष" };
+const BRAND_SUFFIX: LocalizedString = { en: " · Vastukosh", hi: " · वास्तुकोश" };
 
 function withBrand(title: LocalizedString): LocalizedString {
   return {
