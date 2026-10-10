@@ -1,6 +1,7 @@
 import type { GraphQLFormattedError } from "graphql";
 import { unwrapResolverError } from "@apollo/server/errors";
-import { isDomainCode } from "../shared/errors.js";
+import { ZodError } from "zod";
+import { isDomainCode, zodToAppError } from "../shared/errors.js";
 import { isProd } from "../config/env.js";
 import { logger } from "../config/logger.js";
 
@@ -33,7 +34,14 @@ export function formatError(
     return formatted;
   }
 
-  logger.error({ err: unwrapResolverError(error) }, "Unhandled GraphQL error");
+  // A schema `.parse()` inside a service is the caller's bad input, not a crash.
+  const original = unwrapResolverError(error);
+  if (original instanceof ZodError) {
+    const appError = zodToAppError(original);
+    return { message: appError.message, path: formatted.path, locations: formatted.locations, extensions: appError.extensions };
+  }
+
+  logger.error({ err: original }, "Unhandled GraphQL error");
 
   return {
     message: isProd ? "Internal server error" : formatted.message,

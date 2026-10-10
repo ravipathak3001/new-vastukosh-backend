@@ -8,6 +8,7 @@ import {
   REFRESH_COOKIE,
   getUserById,
   login,
+  loginWithGoogle,
   logout,
   refreshCookieOptions,
   requestPasswordReset,
@@ -70,6 +71,12 @@ const signupSchema = z.object({
   name: z.string().min(1).max(120),
   email: z.string().email(),
   password: z.string().min(8).max(200),
+  phone: z
+    .string()
+    .nullish()
+    .refine((v) => !v || /^\+?\d{10,15}$/.test(v.replace(/[\s()-]/g, "")), {
+      message: "Enter a valid phone number: 10 digits, or with country code like +91 98765 43210",
+    }),
 });
 
 export function registerAuthModule() {
@@ -108,6 +115,27 @@ export function registerAuthModule() {
       resolve: async (_p, { input }, ctx) => {
         const result = await login(
           { email: input.email, password: input.password, anonId: input.anonId ?? undefined },
+          sessionMeta(ctx),
+        );
+        setRefreshCookie(ctx, result.tokens.refreshToken);
+        return result;
+      },
+    }),
+
+    /**
+     * "Continue with Google" — signs in, or creates the account on first use.
+     * `idToken` is the credential Google's button/SDK returns.
+     */
+    loginWithGoogle: t.field({
+      type: AuthPayloadRef,
+      args: {
+        idToken: t.arg.string({ required: true }),
+        anonId: t.arg.string({ required: false }),
+        referredBy: t.arg.string({ required: false }),
+      },
+      resolve: async (_p, args, ctx) => {
+        const result = await loginWithGoogle(
+          { idToken: args.idToken, anonId: args.anonId ?? undefined, referredBy: args.referredBy ?? undefined },
           sessionMeta(ctx),
         );
         setRefreshCookie(ctx, result.tokens.refreshToken);

@@ -71,6 +71,9 @@ export async function createApp(httpServer?: Server): Promise<CreatedApp> {
     limit: isProd ? 120 : 1000,
     standardHeaders: true,
     legacyHeaders: false,
+    // The website's own server renders pages for every visitor from a handful
+    // of hosting IPs; it identifies itself with the shared key instead.
+    skip: (req) => Boolean(env.SSR_API_KEY) && req.get("x-ssr-key") === env.SSR_API_KEY,
   });
 
   app.use(

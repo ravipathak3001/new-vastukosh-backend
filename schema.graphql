@@ -1021,6 +1021,7 @@ type Mutation {
   expertConfirmBooking(bookingNo: String!, note: String): ConsultationBooking
   expertProposeReschedule(bookingNo: String!, date: String!, note: String, slot: String!): ConsultationBooking
   login(input: LoginInput!): AuthPayload
+  loginWithGoogle(anonId: String, idToken: String!, referredBy: String): AuthPayload
   logout(everywhere: Boolean, refreshToken: String): Boolean
   markPayoutPaid(id: ID!, note: String, reference: String!): ExpertPayout
   markReturnReceived(note: String, returnNo: String!): Return

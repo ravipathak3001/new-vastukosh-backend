@@ -20,6 +20,7 @@ import { CartModel } from "../cart/cart.model.js";
 import { computeUserPermissions } from "../roles/role.service.js";
 import type { Role } from "../../shared/auth/jwt.js";
 import { getEmailProvider } from "../email/email.provider.js";
+import { verifyGoogleIdToken } from "./google.js";
 
 const referralSuffix = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 
@@ -85,7 +86,12 @@ export async function login(
 ): Promise<{ user: UserDoc; tokens: IssuedTokens }> {
   const email = input.email.toLowerCase().trim();
   const user = await UserModel.findOne({ email });
-  if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+  if (user && !user.passwordHash && user.googleId) {
+    throw unauthenticated(
+      "This account uses Google sign-in. Use “Continue with Google”, or set a password with “Forgot password”.",
+    );
+  }
+  if (!user || !user.passwordHash || !(await verifyPassword(input.password, user.passwordHash))) {
     throw unauthenticated("Incorrect email or password");
   }
 
@@ -96,6 +102,53 @@ export async function login(
 
   const tokens = await issueTokens(user, crypto.randomUUID(), meta);
   return { user, tokens };
+}
+
+/**
+ * "Continue with Google": one call for both sign-in and sign-up. A returning
+ * Google user is found by their Google ID; someone who signed up with email
+ * and password is found by email and linked (Google has verified they own it);
+ * anyone else gets a new account from their Google name and email.
+ */
+export async function loginWithGoogle(
+  input: { idToken: string; anonId?: string; referredBy?: string },
+  meta: SessionMeta,
+): Promise<{ user: UserDoc; tokens: IssuedTokens; created: boolean }> {
+  const google = await verifyGoogleIdToken(input.idToken);
+
+  let created = false;
+  let user =
+    (await UserModel.findOne({ googleId: google.googleId })) ??
+    (await UserModel.findOne({ email: google.email }));
+
+  if (user) {
+    if (!user.googleId || !user.emailVerified) {
+      user.googleId = google.googleId;
+      user.emailVerified = true;
+      await user.save();
+    }
+  } else {
+    try {
+      user = await UserModel.create({
+        email: google.email,
+        name: google.name,
+        googleId: google.googleId,
+        emailVerified: true,
+        referralCode: `SEEKER-${referralSuffix()}`,
+        referredBy: input.referredBy?.trim() ?? "",
+      });
+      created = true;
+    } catch (err) {
+      // Two taps at once: the other request created the account first.
+      if ((err as { code?: number }).code !== 11000) throw err;
+      user = await UserModel.findOne({ email: google.email });
+      if (!user) throw err;
+    }
+  }
+
+  if (input.anonId) await mergeGuestCart(String(user._id), input.anonId);
+  const tokens = await issueTokens(user, crypto.randomUUID(), meta);
+  return { user, tokens, created };
 }
 
 /**

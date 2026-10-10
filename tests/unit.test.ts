@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { canTransition } from "../src/modules/order/order.service.js";
 import { resolveSeo } from "../src/modules/seo/seo.service.js";
 import { ttlToMs } from "../src/shared/auth/jwt.js";
+import { z } from "zod";
+import { zodToAppError } from "../src/shared/errors.js";
 
 describe("order state machine", () => {
   it("allows valid forward transitions", () => {
@@ -50,5 +52,22 @@ describe("ttlToMs", () => {
     expect(ttlToMs("15m")).toBe(900_000);
     expect(ttlToMs("30d")).toBe(2_592_000_000);
     expect(ttlToMs("500")).toBe(500);
+  });
+});
+
+describe("zodToAppError", () => {
+  it("turns validation failures into a readable BAD_INPUT with every field", () => {
+    const schema = z.object({ input: z.object({ email: z.string().email(), password: z.string().min(8) }) });
+    const result = schema.safeParse({ input: { email: "nope", password: "123" } });
+    if (result.success) throw new Error("expected failure");
+    const err = zodToAppError(result.error);
+    expect(err.extensions.code).toBe("BAD_INPUT");
+    expect(err.message).toBe("Enter a valid email address");
+    expect(err.extensions.details).toEqual({
+      fields: [
+        { field: "email", code: "invalid_email", message: "Enter a valid email address" },
+        { field: "password", code: "too_small", message: "Password must be at least 8 characters", minimum: 8 },
+      ],
+    });
   });
 });

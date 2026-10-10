@@ -40,7 +40,10 @@ const userSchema = new Schema(
       trim: true,
       index: true,
     },
-    passwordHash: { type: String, required: true },
+    /** Empty for accounts created with Google until they set a password. */
+    passwordHash: { type: String, default: "" },
+    /** Google account ID (`sub`), once they've used "Continue with Google". */
+    googleId: { type: String, index: { unique: true, sparse: true } },
     name: { type: String, required: true, trim: true },
     phone: { type: String, trim: true, default: "" },
     roles: { type: [String], enum: ROLES, default: ["customer"] },

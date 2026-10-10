@@ -5,7 +5,7 @@ import DataloaderPlugin from "@pothos/plugin-dataloader";
 import SimpleObjectsPlugin from "@pothos/plugin-simple-objects";
 import ZodPlugin from "@pothos/plugin-zod";
 import { DateTimeResolver, JSONResolver } from "graphql-scalars";
-import { forbidden, unauthenticated } from "../shared/errors.js";
+import { forbidden, unauthenticated, zodToAppError } from "../shared/errors.js";
 import type { Context } from "./context.js";
 
 /**
@@ -34,6 +34,11 @@ export const builder = new SchemaBuilder<{
     SimpleObjectsPlugin,
     ZodPlugin,
   ],
+  zod: {
+    // Default would be a plain Error with the raw issue JSON — masked as
+    // INTERNAL by `formatError`, so forms could never say what was wrong.
+    validationError: (error) => zodToAppError(error),
+  },
   scopeAuth: {
     authScopes: async (ctx) => ({
       loggedIn: ctx.user != null,

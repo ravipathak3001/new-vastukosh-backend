@@ -3,6 +3,7 @@ import { customAlphabet } from "nanoid";
 import { logger } from "../../config/logger.js";
 import { badInput, conflict, forbidden, notFound } from "../../shared/errors.js";
 import { searchRegex } from "../../graphql/admin-common.js";
+import { notifyFrontendRevalidate } from "../../shared/http/revalidate-client.js";
 import { UserModel } from "../auth/auth.model.js";
 import {
   CONSULTATION_SERVICE_KEYS,
@@ -36,6 +37,14 @@ import {
   type ExpertStatus,
   type LedgerType,
 } from "./expert.model.js";
+
+/**
+ * The website caches the expert directory and profiles (tag `experts`); tell it
+ * to refresh after anything a customer would see changes. Fire and forget.
+ */
+function refreshPublicExperts() {
+  void notifyFrontendRevalidate(["experts"]);
+}
 
 const SLOT_STEP_MINS = 30;
 const SAME_DAY_LEAD_MINS = 60;
@@ -227,6 +236,7 @@ export async function updateMyExpertProfile(userId: string, input: ExpertProfile
     p.statusNote = "";
   }
   await p.save();
+  refreshPublicExperts();
   return p;
 }
 
@@ -293,6 +303,7 @@ export async function setMyAvailability(
   p.set("availability", windows);
   p.set("daysOff", off);
   await p.save();
+  refreshPublicExperts();
   return p;
 }
 
@@ -360,6 +371,7 @@ export async function upsertMyOffering(userId: string, input: OfferingInput) {
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
   await syncSpecialities(p._id);
+  refreshPublicExperts();
   return doc;
 }
 
@@ -367,6 +379,7 @@ export async function deleteMyOffering(userId: string, offeringId: string) {
   const p = await getMyExpertProfile(userId);
   const res = await ExpertOfferingModel.deleteOne({ _id: offeringId, expertId: p._id });
   if (res.deletedCount === 0) throw notFound("Offering");
+  refreshPublicExperts();
   return true;
 }
 
@@ -804,6 +817,7 @@ export async function addReview(
   booking.reviewed = true;
   await booking.save();
   await recomputeRating(booking.expertId);
+  refreshPublicExperts();
   return booking;
 }
 
@@ -826,6 +840,7 @@ export async function setReviewHidden(reviewId: string, hidden: boolean) {
   const r = await ExpertReviewModel.findByIdAndUpdate(reviewId, { $set: { hidden } }, { new: true });
   if (!r) throw notFound("Review");
   await recomputeRating(r.expertId);
+  refreshPublicExperts();
   return r;
 }
 
@@ -856,6 +871,7 @@ export async function setExpertStatus(id: string, status: ExpertStatus, note = "
   p.statusNote = note.trim();
   if (status === "approved" && !p.approvedAt) p.approvedAt = new Date();
   await p.save();
+  refreshPublicExperts();
   return p;
 }
 

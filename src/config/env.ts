@@ -69,6 +69,17 @@ const schema = z.object({
   GOOGLE_REFRESH_TOKEN: z.string().optional(),
   GOOGLE_CALENDAR_ID: z.string().min(1).default("primary"),
 
+  // "Continue with Google": OAuth client IDs (web, Android, iOS), comma-separated.
+  // Unset = the Google button is refused. Not secret.
+  GOOGLE_SIGNIN_CLIENT_IDS: z.string().optional(),
+  // Tests only — ignored in production, which always uses Google's keys.
+  GOOGLE_JWKS_URL: z.string().url().optional(),
+
+  // Shared secret the website's server sends (header `x-ssr-key`) so its
+  // server-side rendering isn't throttled by the per-IP GraphQL rate limit —
+  // every visitor's page is fetched from the same few hosting IPs.
+  SSR_API_KEY: z.string().optional(),
+
   SITE_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_REVALIDATE_URL: z.string().url().optional(),
   REVALIDATE_SECRET: z.string().optional(),
@@ -92,6 +103,50 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/**
+ * Production must not run on development defaults. Each of these has a safe
+ * dev fallback that becomes dangerous live (forgeable admin tokens, orders
+ * marked paid without charging, emails linking to localhost), so refuse to
+ * boot instead of silently falling back.
+ */
+if (env.NODE_ENV === "production") {
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  for (const key of ["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"] as const) {
+    if (env[key].startsWith("dev-") || env[key].length < 32) {
+      problems.push(`${key} must be set to a random value of at least 32 characters`);
+    }
+  }
+  if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
+    problems.push("JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ");
+  }
+  if (!env.COOKIE_SECURE) problems.push("COOKIE_SECURE must be true (HTTPS only)");
+  if (env.PAYMENT_PROVIDER === "mock" && process.env.ALLOW_MOCK_PAYMENTS !== "true") {
+    problems.push("PAYMENT_PROVIDER=mock marks every order paid without charging — use razorpay");
+  }
+  if (env.PAYMENT_PROVIDER === "razorpay" && (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET || !env.RAZORPAY_WEBHOOK_SECRET)) {
+    problems.push("RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET are all required");
+  }
+  if (/localhost|127\.0\.0\.1/.test(env.SITE_URL) && process.env.ALLOW_LOCAL_SITE_URL !== "true") {
+    problems.push("SITE_URL points at localhost — emails and links would be broken");
+  }
+  if (env.EMAIL_PROVIDER === "mock") warnings.push("EMAIL_PROVIDER=mock — no emails will be sent");
+  if (env.MEETING_PROVIDER === "mock") warnings.push("MEETING_PROVIDER=mock — consultations get Jitsi links, not Google Meet");
+  if (!env.SSR_API_KEY) warnings.push("SSR_API_KEY unset — the website's server rendering shares the per-IP rate limit");
+  if (!env.REVALIDATE_SECRET || !env.FRONTEND_REVALIDATE_URL) {
+    warnings.push("FRONTEND_REVALIDATE_URL / REVALIDATE_SECRET unset — admin edits take up to an hour to show on the site");
+  }
+  for (const w of warnings) {
+    // eslint-disable-next-line no-console
+    console.warn(`⚠️  ${w}`);
+  }
+  if (problems.length) {
+    // eslint-disable-next-line no-console
+    console.error("❌ Unsafe production configuration:\n - " + problems.join("\n - "));
+    process.exit(1);
+  }
+}
 
 export const isProd = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
