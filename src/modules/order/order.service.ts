@@ -1,4 +1,5 @@
 import type { FilterQuery } from "mongoose";
+import { notifyOrderStatus } from "./order.emails.js";
 import { customAlphabet } from "nanoid";
 import { badInput, forbidden, notFound } from "../../shared/errors.js";
 import { searchRegex } from "../../graphql/admin-common.js";
@@ -70,6 +71,7 @@ export async function advanceStatus(
   order.status = to;
   order.timeline.push({ status: to, at: new Date(), note });
   await order.save();
+  await notifyOrderStatus(order, to);
   // A cancel always restocks. A refund restocks too, unless the order was
   // already `cancelled` (and so already restocked) before being refunded.
   if (to === "cancelled" || (to === "refunded" && from !== "cancelled")) {
@@ -91,6 +93,7 @@ export type PlaceOrderInput = {
     phone?: string;
   };
   paymentMethod: PaymentMethod;
+  locale?: string;
 };
 
 export async function placeOrder(
@@ -140,6 +143,7 @@ export async function placeOrder(
       status: "pending_payment",
       payment: { provider: provider.name, method: input.paymentMethod, status: "created" },
       timeline: [{ status: "pending_payment", at: new Date(), note: "Order created" }],
+      locale: input.locale === "hi" ? "hi" : "en",
     });
     if (!isCod) {
       intent = await provider.createIntent({
@@ -221,6 +225,7 @@ export async function markOrderPaid(providerRef: string, transactionId = ""): Pr
     "Payment confirmed via webhook",
   );
   if (updated) {
+    await notifyOrderStatus(updated, "consecration");
     // Guest (anonId) carts aren't linked from the order, so only logged-in
     // carts can be cleared here — the client-side verify path clears the
     // rest via its own owner context.
@@ -269,6 +274,7 @@ export async function verifyRazorpayPayment(
     }
     const updated = await confirmOrderPaid({ orderNo }, razorpayPaymentId, "Payment confirmed by client");
     if (updated) {
+      await notifyOrderStatus(updated, "consecration");
       await clearCart(owner);
       return updated;
     }

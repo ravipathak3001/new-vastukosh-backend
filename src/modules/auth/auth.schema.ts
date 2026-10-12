@@ -12,6 +12,8 @@ import {
   logout,
   refreshCookieOptions,
   requestPasswordReset,
+  resendVerificationEmail,
+  verifyEmail,
   resetPassword,
   rotateRefreshToken,
   signup,
@@ -101,6 +103,7 @@ export function registerAuthModule() {
             name: input.name,
             phone: input.phone ?? undefined,
             referredBy: input.referredBy ?? undefined,
+            locale: ctx.locale,
           },
           sessionMeta(ctx),
         );
@@ -122,6 +125,21 @@ export function registerAuthModule() {
       },
     }),
 
+    /** Opens the link from the "confirm your email" message. Works without being signed in. */
+    verifyEmail: t.boolean({
+      args: { token: t.arg.string({ required: true }) },
+      resolve: async (_p, { token }) => {
+        await verifyEmail(token);
+        return true;
+      },
+    }),
+
+    /** Sends a fresh confirmation link to the signed-in user. False if they're already verified. */
+    resendVerificationEmail: t.boolean({
+      authScopes: { loggedIn: true },
+      resolve: (_p, _a, ctx) => resendVerificationEmail(ctx.user!.id),
+    }),
+
     /**
      * "Continue with Google" — signs in, or creates the account on first use.
      * `idToken` is the credential Google's button/SDK returns.
@@ -135,7 +153,7 @@ export function registerAuthModule() {
       },
       resolve: async (_p, args, ctx) => {
         const result = await loginWithGoogle(
-          { idToken: args.idToken, anonId: args.anonId ?? undefined, referredBy: args.referredBy ?? undefined },
+          { idToken: args.idToken, anonId: args.anonId ?? undefined, referredBy: args.referredBy ?? undefined, locale: ctx.locale },
           sessionMeta(ctx),
         );
         setRefreshCookie(ctx, result.tokens.refreshToken);

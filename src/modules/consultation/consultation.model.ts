@@ -146,6 +146,8 @@ const bookingSchema = new Schema(
     paymentClientData: { type: Schema.Types.Mixed, default: null },
     meeting: { type: bookingMeetingSchema, default: null },
     recordingUrl: { type: String, default: "" },
+    /** Set once the "starts in an hour" email has gone out for the current date/slot. */
+    reminderSentFor: { type: String, default: "" },
     proposedDate: { type: String, default: "" },
     proposedSlot: { type: String, default: "" },
     adminNote: { type: String, default: "" },

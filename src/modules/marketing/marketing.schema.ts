@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { builder } from "../../graphql/builder.js";
-import { subscribeNewsletter, submitContactForm } from "./marketing.service.js";
+import { subscribeNewsletter, submitContactForm, unsubscribeNewsletter } from "./marketing.service.js";
 
 const OkResultRef = builder
   .objectRef<{ ok: boolean }>("MutationOk")
@@ -18,6 +18,13 @@ const ContactInput = builder.inputType("ContactInput", {
 
 export function registerMarketingModule() {
   builder.mutationFields((t) => ({
+    /** The link at the bottom of newsletter emails (`e` = email, `t` = signed token). */
+    unsubscribeNewsletter: t.field({
+      type: OkResultRef,
+      args: { email: t.arg.string({ required: true }), token: t.arg.string({ required: true }) },
+      resolve: (_p, { email, token }) => unsubscribeNewsletter(email, token),
+    }),
+
     subscribeNewsletter: t.field({
       type: OkResultRef,
       args: {

@@ -55,6 +55,13 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default("Vastukosh <no-reply@vastukosh.com>"),
   PASSWORD_RESET_TTL: z.string().default("1h"),
+  EMAIL_VERIFY_TTL: z.string().default("48h"),
+  // Where customer replies go (e.g. support@…), since EMAIL_FROM is a no-reply address.
+  EMAIL_REPLY_TO: z.string().optional(),
+  // Team inbox(es) for "new order / booking / return / application…" alerts, comma-separated.
+  ADMIN_NOTIFY_EMAILS: z.string().optional(),
+  // Admin panel address, for the links in those alerts.
+  ADMIN_URL: z.string().url().default("http://localhost:3001"),
 
   // Consultation / pooja bookings. Slots are wall-clock times in this zone.
   BOOKING_TIMEZONE: z.string().min(1).default("Asia/Kolkata"),
@@ -132,6 +139,7 @@ if (env.NODE_ENV === "production") {
     problems.push("SITE_URL points at localhost — emails and links would be broken");
   }
   if (env.EMAIL_PROVIDER === "mock") warnings.push("EMAIL_PROVIDER=mock — no emails will be sent");
+  if (!env.ADMIN_NOTIFY_EMAILS) warnings.push("ADMIN_NOTIFY_EMAILS unset — your team won't get new-order / booking alerts");
   if (env.MEETING_PROVIDER === "mock") warnings.push("MEETING_PROVIDER=mock — consultations get Jitsi links, not Google Meet");
   if (!env.SSR_API_KEY) warnings.push("SSR_API_KEY unset — the website's server rendering shares the per-IP rate limit");
   if (!env.REVALIDATE_SECRET || !env.FRONTEND_REVALIDATE_URL) {

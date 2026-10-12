@@ -1038,6 +1038,7 @@ type Mutation {
   requestPasswordReset(email: String!): Boolean
   requestPayout(amount: Float!): ExpertPayout
   requestReturn(items: [ReturnItemInput!]!, orderNo: String!): Return
+  resendVerificationEmail: Boolean
   resetPassword(newPassword: String!, token: String!): Boolean
   respondToBookingReschedule(accept: Boolean!, bookingNo: String!, token: String): ConsultationBooking
   restoreProduct(slug: String!): Product
@@ -1057,6 +1058,7 @@ type Mutation {
   submitContactForm(input: ContactInput!): MutationOk
   submitExpertReview(bookingNo: String!, comment: String, rating: Int!, token: String): ConsultationBooking
   subscribeNewsletter(email: String!, source: String): MutationOk
+  unsubscribeNewsletter(email: String!, token: String!): MutationOk
   updateAddress(addressId: ID!, input: AddressInput!): User
   updateAnnouncementBar(input: AnnouncementInput!): Announcement
   updateBookingStatus(id: ID!, status: BookingStatus!): ConsultationBooking
@@ -1085,6 +1087,7 @@ type Mutation {
   upsertStone(input: StoneInput!): Stone
   upsertTestimonial(input: TestimonialInput!): Testimonial
   verifyBookingPayment(bookingNo: String!, razorpayOrderId: String!, razorpayPaymentId: String!, razorpaySignature: String!, token: String): ConsultationBooking
+  verifyEmail(token: String!): Boolean
   verifyOrder(orderNo: String!): Order
   verifyRazorpayPayment(anonId: String, orderNo: String!, razorpayOrderId: String!, razorpayPaymentId: String!, razorpaySignature: String!): Order
 }

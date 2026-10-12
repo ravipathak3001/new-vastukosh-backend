@@ -1,4 +1,16 @@
 import { Types, type FilterQuery } from "mongoose";
+import { env } from "../../config/env.js";
+import { queueAdminEmail, queueEmail } from "../email/outbox.service.js";
+import { asLocale, type RenderedEmail } from "../email/layout.js";
+import {
+  adminExpertApplicationTemplate,
+  adminPayoutRequestedTemplate,
+  expertApplicationReceivedTemplate,
+  expertNewReviewTemplate,
+  expertPayoutPaidTemplate,
+  expertPayoutRejectedTemplate,
+  expertStatusTemplate,
+} from "../email/templates/expert.js";
 import { customAlphabet } from "nanoid";
 import { logger } from "../../config/logger.js";
 import { badInput, conflict, forbidden, notFound } from "../../shared/errors.js";
@@ -207,6 +219,20 @@ export async function applyAsExpert(userId: string, input: ExpertProfileInput) {
     await user.save();
   }
   logger.info({ expertId: String(profile._id) }, "New expert application");
+  await notifyExpert(profile._id, `expert:applied:${profile._id}`, "expert.applied", expertApplicationReceivedTemplate);
+  await queueAdminEmail({
+    kind: "admin.expert_application",
+    ref: String(profile._id),
+    dedupeKey: `admin:expert:${profile._id}`,
+    ...adminExpertApplicationTemplate({
+      id: String(profile._id),
+      displayName,
+      email: user.email,
+      specialities: (profile.specialities ?? []) as string[],
+      city: profile.city ?? "",
+      experienceYears: profile.experienceYears ?? 0,
+    }),
+  });
   return profile;
 }
 
@@ -700,6 +726,18 @@ export async function requestPayout(userId: string, amount: number): Promise<Exp
     await ExpertPayoutModel.deleteOne({ _id: payout._id });
     throw badInput("That's more than your available balance");
   }
+  await queueAdminEmail({
+    kind: "admin.payout_requested",
+    ref: payout.payoutNo,
+    dedupeKey: `admin:payout:${payout.payoutNo}`,
+    ...adminPayoutRequestedTemplate({
+      payoutNo: payout.payoutNo,
+      amount: payout.amount,
+      expertName: p.displayName ?? "",
+      method: payout.method ?? "",
+      destination: payout.destination ?? "",
+    }),
+  });
   return payout;
 }
 
@@ -727,6 +765,14 @@ export async function markPayoutPaid(payoutId: string, reference: string, adminU
     { new: true },
   );
   if (!payout) throw badInput("This cashout isn't awaiting payment");
+  await notifyExpert(payout.expertId, `expert:payout:${payout.payoutNo}:paid`, "expert.payout_paid", (u) =>
+    expertPayoutPaidTemplate(u, {
+      payoutNo: payout.payoutNo,
+      amount: payout.amount,
+      reference: payout.reference ?? "",
+      destination: payout.destination ?? "",
+    }),
+  );
   return payout;
 }
 
@@ -745,6 +791,9 @@ export async function rejectPayout(payoutId: string, note: string, adminUserId: 
     payoutId: payout._id,
     note: `Cashout ${payout.payoutNo} rejected — funds returned`,
   });
+  await notifyExpert(payout.expertId, `expert:payout:${payout.payoutNo}:rejected`, "expert.payout_rejected", (u) =>
+    expertPayoutRejectedTemplate(u, { payoutNo: payout.payoutNo, amount: payout.amount, adminNote: payout.adminNote ?? "" }),
+  );
   return payout;
 }
 
@@ -818,6 +867,9 @@ export async function addReview(
   await booking.save();
   await recomputeRating(booking.expertId);
   refreshPublicExperts();
+  await notifyExpert(booking.expertId, `expert:review:${booking._id}`, "expert.review", (u) =>
+    expertNewReviewTemplate(u, { rating, comment: comment.trim(), authorName: booking.name.split(" ")[0] || booking.name }),
+  );
   return booking;
 }
 
@@ -867,11 +919,18 @@ export async function setExpertStatus(id: string, status: ExpertStatus, note = "
   if ((status === "rejected" || status === "suspended") && !note.trim()) {
     throw badInput("Add a note — the expert will see it");
   }
+  const previous = p.status;
   p.status = status;
   p.statusNote = note.trim();
   if (status === "approved" && !p.approvedAt) p.approvedAt = new Date();
   await p.save();
   refreshPublicExperts();
+  if (status !== previous && status !== "pending") {
+    const profileUrl = `${env.SITE_URL}/en/experts/${p.slug}`;
+    await notifyExpert(p._id, `expert:status:${p._id}:${status}:${Date.now()}`, `expert.${status}`, (u) =>
+      expertStatusTemplate(u, status, p.statusNote ?? "", profileUrl),
+    );
+  }
   return p;
 }
 
@@ -889,4 +948,23 @@ export async function expertEmail(expertId: Types.ObjectId | string): Promise<st
   if (!p) return null;
   const u = await UserModel.findById(p.userId).select("email");
   return u?.email ?? null;
+}
+
+/** Emails an expert in their own language (from their account), addressed by their display name. */
+async function notifyExpert(
+  expertId: Types.ObjectId | string,
+  dedupeKey: string,
+  kind: string,
+  build: (u: { name: string; locale: "en" | "hi" }) => RenderedEmail,
+): Promise<void> {
+  const profile = await ExpertProfileModel.findById(expertId).select("userId displayName");
+  const user = profile ? await UserModel.findById(profile.userId).select("email name localePref") : null;
+  if (!profile || !user) return;
+  await queueEmail({
+    to: user.email,
+    kind,
+    ref: String(expertId),
+    dedupeKey,
+    ...build({ name: profile.displayName || user.name, locale: asLocale(user.localePref) }),
+  });
 }

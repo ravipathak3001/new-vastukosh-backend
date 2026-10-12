@@ -9,6 +9,9 @@ import { startShippingAutomation, stopShippingAutomation } from "./modules/shipp
 import { startBookingJobs, stopBookingJobs } from "./modules/consultation/booking.job.js";
 import { getMeetingProvider } from "./modules/consultation/meeting.provider.js";
 import { ensureSuperAdminRole } from "./modules/roles/role.service.js";
+import { getEmailProvider } from "./modules/email/email.provider.js";
+import { onEmailMinute, startEmailJobs, stopEmailJobs } from "./modules/email/outbox.service.js";
+import { sendDueBookingReminders } from "./modules/consultation/booking-reminders.js";
 
 async function main() {
   await connectDb();
@@ -16,9 +19,12 @@ async function main() {
   getPaymentProvider(); // log which provider is active at boot
   getShippingProvider();
   getMeetingProvider();
+  getEmailProvider();
   if (!isTest) {
     startShippingAutomation();
     startBookingJobs();
+    onEmailMinute(sendDueBookingReminders);
+    startEmailJobs();
   }
 
   // Create the bare server first so Apollo's drain plugin can hook it.
@@ -37,6 +43,7 @@ async function main() {
     logger.info({ signal }, "Shutting down");
     stopShippingAutomation();
     stopBookingJobs();
+    stopEmailJobs();
     await apollo.stop(); // runs the drain plugin
     await disconnectDb();
     process.exit(0);

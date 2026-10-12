@@ -168,6 +168,7 @@ export function registerOrderModule() {
         const payload: PlaceOrderInput = {
           email: input.email,
           paymentMethod: input.paymentMethod as PlaceOrderInput["paymentMethod"],
+          locale: ctx.locale,
           shippingAddress: {
             firstName: input.shippingAddress.firstName,
             lastName: input.shippingAddress.lastName ?? undefined,

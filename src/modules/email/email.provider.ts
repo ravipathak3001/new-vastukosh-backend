@@ -9,15 +9,15 @@ import { logger } from "../../config/logger.js";
  */
 export interface EmailProvider {
   readonly name: string;
-  send(to: string, subject: string, html: string): Promise<void>;
+  send(to: string, subject: string, html: string, text?: string): Promise<void>;
 }
 
 /** Logs instead of sending — the default until SMTP is configured. */
 export class MockEmailProvider implements EmailProvider {
   readonly name = "mock";
 
-  async send(to: string, subject: string, html: string): Promise<void> {
-    logger.info({ to, subject, html }, "Email (mock) — not actually sent");
+  async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+    logger.info({ to, subject, html, text }, "Email (mock) — not actually sent");
   }
 }
 
@@ -43,8 +43,15 @@ export class SmtpEmailProvider implements EmailProvider {
     return this.transporter;
   }
 
-  async send(to: string, subject: string, html: string): Promise<void> {
-    await this.getTransporter().sendMail({ from: env.EMAIL_FROM, to, subject, html });
+  async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+    await this.getTransporter().sendMail({
+      from: env.EMAIL_FROM,
+      replyTo: env.EMAIL_REPLY_TO || undefined,
+      to,
+      subject,
+      html,
+      text,
+    });
   }
 }
 

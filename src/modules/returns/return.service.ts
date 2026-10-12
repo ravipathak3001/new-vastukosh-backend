@@ -1,4 +1,6 @@
 import { customAlphabet } from "nanoid";
+import { queueAdminEmail, queueEmail } from "../email/outbox.service.js";
+import { adminReturnRequestedTemplate, returnStatusTemplate } from "../email/templates/returns.js";
 import { badInput, forbidden, notFound } from "../../shared/errors.js";
 import { logger } from "../../config/logger.js";
 import { searchRegex } from "../../graphql/admin-common.js";
@@ -37,7 +39,26 @@ async function advance(ret: ReturnDoc, to: ReturnStatus, note = ""): Promise<Ret
   ret.status = to;
   ret.timeline.push({ status: to, at: new Date(), note });
   await ret.save();
+  await notifyReturn(ret, to, note);
   return ret;
+}
+
+/** Tells the customer where their return stands (and the team about new requests). */
+async function notifyReturn(ret: ReturnDoc, status: ReturnStatus, note = ""): Promise<void> {
+  const order = await OrderModel.findOne({ orderNo: ret.orderNo });
+  if (!order) return;
+  const email = returnStatusTemplate(status, { ret, order, note });
+  if (email) {
+    await queueEmail({ to: order.email, kind: `return.${status}`, ref: ret.returnNo, dedupeKey: `return:${ret.returnNo}:${status}`, ...email });
+  }
+  if (status === "requested") {
+    await queueAdminEmail({
+      kind: "admin.return_requested",
+      ref: ret.returnNo,
+      dedupeKey: `admin:return:${ret.returnNo}`,
+      ...adminReturnRequestedTemplate({ ret, order, note }),
+    });
+  }
 }
 
 export type ReturnEligibility = {
@@ -128,6 +149,7 @@ export async function requestReturn(input: RequestReturnInput): Promise<ReturnDo
     timeline: [{ status: "requested", at: new Date(), note: "" }],
   });
   logger.info({ returnNo: ret.returnNo, orderNo: order.orderNo }, "Return requested");
+  await notifyReturn(ret, "requested");
   return ret;
 }
 

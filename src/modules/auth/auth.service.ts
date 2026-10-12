@@ -11,6 +11,7 @@ import {
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import {
+  EmailVerificationTokenModel,
   PasswordResetTokenModel,
   RefreshTokenModel,
   UserModel,
@@ -19,7 +20,14 @@ import {
 import { CartModel } from "../cart/cart.model.js";
 import { computeUserPermissions } from "../roles/role.service.js";
 import type { Role } from "../../shared/auth/jwt.js";
-import { getEmailProvider } from "../email/email.provider.js";
+import { queueEmail } from "../email/outbox.service.js";
+import { asLocale, siteUrl } from "../email/layout.js";
+import {
+  passwordChangedTemplate,
+  passwordResetTemplate,
+  verifyEmailTemplate,
+  welcomeTemplate,
+} from "../email/templates/account.js";
 import { verifyGoogleIdToken } from "./google.js";
 
 const referralSuffix = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
@@ -57,7 +65,7 @@ async function issueTokens(
 }
 
 export async function signup(
-  input: { email: string; password: string; name: string; phone?: string; referredBy?: string },
+  input: { email: string; password: string; name: string; phone?: string; referredBy?: string; locale?: string },
   meta: SessionMeta,
 ): Promise<{ user: UserDoc; tokens: IssuedTokens }> {
   const email = input.email.toLowerCase().trim();
@@ -74,10 +82,79 @@ export async function signup(
     phone: input.phone?.trim() ?? "",
     referralCode,
     referredBy: input.referredBy?.trim() ?? "",
+    localePref: asLocale(input.locale),
   });
 
+  await sendVerificationEmail(user);
   const tokens = await issueTokens(user, crypto.randomUUID(), meta);
   return { user, tokens };
+}
+
+// ─── Email verification ───────────────────────────────────────────────────
+
+const hashToken = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
+
+/** Emails a one-time "confirm your email" link (replacing any earlier unused one). */
+export async function sendVerificationEmail(user: UserDoc): Promise<void> {
+  if (user.emailVerified) return;
+  const token = crypto.randomBytes(32).toString("base64url");
+  await EmailVerificationTokenModel.updateMany(
+    { userId: user._id, usedAt: null },
+    { $set: { usedAt: new Date() } },
+  );
+  await EmailVerificationTokenModel.create({
+    userId: user._id,
+    email: user.email,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + ttlToMs(env.EMAIL_VERIFY_TTL)),
+  });
+  const locale = asLocale(user.localePref);
+  await queueEmail({
+    to: user.email,
+    kind: "account.verify",
+    ref: String(user._id),
+    ...verifyEmailTemplate(
+      { name: user.name, email: user.email, locale },
+      siteUrl(locale, `/verify-email?token=${token}`),
+    ),
+  });
+}
+
+/** "Resend" button: at most one email a minute, so it can't be used to spam an inbox. */
+export async function resendVerificationEmail(userId: string): Promise<boolean> {
+  const user = await UserModel.findById(userId);
+  if (!user) throw unauthenticated();
+  if (user.emailVerified) return false;
+  const recent = await EmailVerificationTokenModel.exists({
+    userId: user._id,
+    createdAt: { $gt: new Date(Date.now() - 60_000) },
+  });
+  if (recent) throw badInput("We just sent a link — please wait a minute before asking again");
+  await sendVerificationEmail(user);
+  return true;
+}
+
+/** Consumes a verification link. Safe to open twice: an already-verified account just succeeds. */
+export async function verifyEmail(token: string): Promise<UserDoc> {
+  const record = await EmailVerificationTokenModel.findOne({ tokenHash: hashToken(token) });
+  const user = record ? await UserModel.findById(record.userId) : null;
+  if (!record || !user) throw badInput("This verification link is invalid or has expired");
+  if (user.emailVerified && user.email === record.email) return user;
+  if (record.usedAt || record.expiresAt.getTime() < Date.now() || user.email !== record.email) {
+    throw badInput("This verification link is invalid or has expired");
+  }
+  record.usedAt = new Date();
+  await record.save();
+  user.emailVerified = true;
+  await user.save();
+  await queueEmail({
+    to: user.email,
+    kind: "account.welcome",
+    ref: String(user._id),
+    dedupeKey: `welcome:${user._id}`,
+    ...welcomeTemplate({ name: user.name, email: user.email, locale: asLocale(user.localePref) }),
+  });
+  return user;
 }
 
 export async function login(
@@ -111,7 +188,7 @@ export async function login(
  * anyone else gets a new account from their Google name and email.
  */
 export async function loginWithGoogle(
-  input: { idToken: string; anonId?: string; referredBy?: string },
+  input: { idToken: string; anonId?: string; referredBy?: string; locale?: string },
   meta: SessionMeta,
 ): Promise<{ user: UserDoc; tokens: IssuedTokens; created: boolean }> {
   const google = await verifyGoogleIdToken(input.idToken);
@@ -136,8 +213,16 @@ export async function loginWithGoogle(
         emailVerified: true,
         referralCode: `SEEKER-${referralSuffix()}`,
         referredBy: input.referredBy?.trim() ?? "",
+        localePref: asLocale(input.locale),
       });
       created = true;
+      await queueEmail({
+        to: user.email,
+        kind: "account.welcome",
+        ref: String(user._id),
+        dedupeKey: `welcome:${user._id}`,
+        ...welcomeTemplate({ name: user.name, email: user.email, locale: asLocale(user.localePref) }),
+      });
     } catch (err) {
       // Two taps at once: the other request created the account first.
       if ((err as { code?: number }).code !== 11000) throw err;
@@ -259,16 +344,16 @@ export async function requestPasswordReset(email: string): Promise<void> {
     expiresAt: new Date(Date.now() + ttlToMs(env.PASSWORD_RESET_TTL)),
   });
 
-  const locale = user.localePref || "en";
-  const resetUrl = `${env.SITE_URL}/${locale}/reset-password?token=${token}`;
-  await getEmailProvider().send(
-    user.email,
-    "Reset your Vastukosh password",
-    `<p>Hi ${user.name},</p>` +
-      `<p>Click below to choose a new password. This link expires in ${env.PASSWORD_RESET_TTL}.</p>` +
-      `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
-      `<p>If you didn't request this, you can safely ignore this email.</p>`,
-  );
+  const locale = asLocale(user.localePref);
+  await queueEmail({
+    to: user.email,
+    kind: "account.password_reset",
+    ref: String(user._id),
+    ...passwordResetTemplate(
+      { name: user.name, email: user.email, locale },
+      siteUrl(locale, `/reset-password?token=${token}`),
+    ),
+  });
 }
 
 /** Consumes the token, sets the new password, and revokes every existing session. */
@@ -283,7 +368,15 @@ export async function resetPassword(token: string, newPassword: string): Promise
   if (!user) throw badInput("This reset link is invalid or has expired");
 
   user.passwordHash = await hashPassword(newPassword);
+  // Using the emailed link proves they own the inbox.
+  user.emailVerified = true;
   await user.save();
+  await queueEmail({
+    to: user.email,
+    kind: "account.password_changed",
+    ref: String(user._id),
+    ...passwordChangedTemplate({ name: user.name, email: user.email, locale: asLocale(user.localePref) }),
+  });
   record.usedAt = new Date();
   await record.save();
 

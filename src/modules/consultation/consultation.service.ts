@@ -35,6 +35,9 @@ import {
 } from "../expert/expert.service.js";
 import { ExpertProfileModel } from "../expert/expert.model.js";
 import {
+  sendAdminNewBooking,
+  sendBookingCancelled,
+  sendBookingCompleted,
   sendBookingConfirmed,
   sendBookingReceived,
   sendBookingRefunded,
@@ -286,6 +289,7 @@ export async function createBooking(
 
   if (isFree) {
     void sendBookingReceived(booking);
+    void sendAdminNewBooking(booking);
     if (booking.expertId) void notifyExpertOfBooking(booking);
     return { booking, clientData: {}, accessToken };
   }
@@ -363,6 +367,7 @@ async function confirmBookingPaid(
   if (updated) {
     if (late) logger.warn({ bookingNo: updated.bookingNo }, "Booking paid after hold expired");
     void sendBookingReceived(updated);
+    void sendAdminNewBooking(updated);
     if (updated.expertId) void notifyExpertOfBooking(updated);
   }
   return updated;
@@ -677,6 +682,7 @@ export async function completeBooking(
   // The expert's share becomes withdrawable once the session is done.
   if (firstCompletion) await creditBookingEarning(b);
   if (newRecording) void sendRecordingReady(b);
+  else if (firstCompletion) void sendBookingCompleted(b);
   return b;
 }
 
@@ -701,6 +707,7 @@ async function refundBookingDoc(
     b.status = "cancelled";
     b.history.push(historyEntry("cancelled", note));
     await b.save();
+    void sendBookingCancelled(b);
     return b;
   }
 
@@ -768,9 +775,12 @@ export async function updateBookingStatus(
       throw badInput("This booking was paid — refund it instead of cancelling");
     }
     if (b.meeting?.eventId) await getMeetingProvider().cancelMeeting(b.meeting.eventId).catch(() => {});
+    const wasLive = b.status !== "pending_payment";
     b.status = "cancelled";
     b.history.push(historyEntry("cancelled", "Cancelled by admin"));
     await b.save();
+    // An abandoned, never-paid checkout doesn't need a "cancelled" email.
+    if (wasLive) void sendBookingCancelled(b);
     return b;
   }
   if (status === "requested" && b.status === "pending_payment" && b.payment.status !== "captured") {

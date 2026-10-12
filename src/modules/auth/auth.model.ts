@@ -115,3 +115,26 @@ export const PasswordResetTokenModel = defineModel(
   "PasswordResetToken",
   passwordResetTokenSchema,
 );
+
+/**
+ * One-time links that prove someone owns the email they signed up with.
+ * Stored hashed like reset tokens; `email` pins the link to the address it
+ * was sent to, so it can't verify a different address later.
+ */
+const emailVerificationTokenSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
+    tokenHash: { type: String, required: true, unique: true, index: true },
+    expiresAt: { type: Date, required: true },
+    usedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+emailVerificationTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+export type EmailVerificationToken = InferSchemaType<typeof emailVerificationTokenSchema>;
+export const EmailVerificationTokenModel = defineModel(
+  "EmailVerificationToken",
+  emailVerificationTokenSchema,
+);

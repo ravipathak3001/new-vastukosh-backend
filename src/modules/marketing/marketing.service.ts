@@ -1,4 +1,14 @@
+import crypto from "node:crypto";
 import type { FilterQuery } from "mongoose";
+import { env } from "../../config/env.js";
+import { badInput } from "../../shared/errors.js";
+import { queueAdminEmail, queueEmail } from "../email/outbox.service.js";
+import { asLocale, siteUrl } from "../email/layout.js";
+import {
+  adminContactTemplate,
+  contactReceivedTemplate,
+  newsletterWelcomeTemplate,
+} from "../email/templates/marketing.js";
 import type { Locale } from "../../shared/localized.js";
 import { notFound } from "../../shared/errors.js";
 import { searchRegex } from "../../graphql/admin-common.js";
@@ -17,11 +27,41 @@ export async function subscribeNewsletter(
   source = "footer",
 ): Promise<{ ok: true }> {
   const normalized = email.toLowerCase().trim();
+  const before = await NewsletterSubscriberModel.findOne({ email: normalized }).select("status");
   await NewsletterSubscriberModel.updateOne(
     { email: normalized },
     { $set: { status: "subscribed", locale, source }, $setOnInsert: { email: normalized } },
     { upsert: true },
   );
+  // Only a new (or returning) subscriber gets the welcome — re-submitting the form doesn't.
+  if (before?.status !== "subscribed") {
+    const L = asLocale(locale);
+    await queueEmail({
+      to: normalized,
+      kind: "newsletter.welcome",
+      ...newsletterWelcomeTemplate(L, unsubscribeUrl(normalized, L)),
+    });
+  }
+  return { ok: true };
+}
+
+/** Signed so nobody can unsubscribe someone else by guessing their address. */
+function unsubscribeToken(email: string): string {
+  return crypto.createHmac("sha256", env.JWT_ACCESS_SECRET).update(`unsubscribe:${email}`).digest("base64url").slice(0, 32);
+}
+
+export function unsubscribeUrl(email: string, locale: "en" | "hi"): string {
+  return siteUrl(locale, `/unsubscribe?e=${encodeURIComponent(email)}&t=${unsubscribeToken(email)}`);
+}
+
+/** The one-click link in newsletter emails. */
+export async function unsubscribeNewsletter(email: string, token: string): Promise<{ ok: true }> {
+  const normalized = email.toLowerCase().trim();
+  const expected = unsubscribeToken(normalized);
+  if (token.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected))) {
+    throw badInput("This unsubscribe link isn't valid");
+  }
+  await NewsletterSubscriberModel.updateOne({ email: normalized }, { $set: { status: "unsubscribed" } });
   return { ok: true };
 }
 
@@ -41,6 +81,15 @@ export async function submitContactForm(input: {
     message: input.message.trim(),
     locale: input.locale,
   });
+  const c = {
+    name: input.name.trim(),
+    email: input.email.toLowerCase().trim(),
+    phone: input.phone?.trim() ?? "",
+    subject: input.subject?.trim() ?? "",
+    message: input.message.trim(),
+  };
+  await queueEmail({ to: c.email, kind: "contact.received", ...contactReceivedTemplate({ ...c, locale: asLocale(input.locale) }) });
+  await queueAdminEmail({ kind: "admin.contact", ...adminContactTemplate(c) });
   return { ok: true };
 }
 

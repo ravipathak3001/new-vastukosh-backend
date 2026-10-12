@@ -9,7 +9,8 @@ const AUD = "test-web.apps.googleusercontent.com";
 
 // A stand-in for Google: our own key pair, its public half served as a JWKS
 // at the URL vitest.config.ts points GOOGLE_JWKS_URL to.
-let privateKey: CryptoKey;
+type PrivateKey = Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
+let privateKey: PrivateKey;
 let server: http.Server;
 const strangerKey = await generateKeyPair("RS256");
 
@@ -32,7 +33,7 @@ beforeEach(resetDb);
 
 function googleToken(
   claims: Record<string, unknown> = {},
-  opts: { aud?: string; iss?: string; exp?: string; key?: CryptoKey } = {},
+  opts: { aud?: string; iss?: string; exp?: string; key?: PrivateKey } = {},
 ) {
   return new SignJWT({ email: "meera@gmail.com", email_verified: true, name: "Meera Iyer", ...claims })
     .setProtectedHeader({ alg: "RS256", kid: "test-key" })

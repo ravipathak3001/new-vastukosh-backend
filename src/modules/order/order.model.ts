@@ -109,6 +109,8 @@ const orderSchema = new Schema(
     verifiedAt: { type: Date, default: null },
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     shipment: { type: orderShipmentSchema, default: null },
+    /** Language the customer shopped in — their emails use it. */
+    locale: { type: String, enum: ["en", "hi"], default: "en" },
   },
   { timestamps: true },
 );
