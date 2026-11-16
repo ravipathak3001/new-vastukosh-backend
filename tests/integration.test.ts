@@ -65,6 +65,19 @@ describe("auth", () => {
   });
 });
 
+describe("own account totals", () => {
+  it("lets a customer read their own order count and spend (the app's Account screen)", async () => {
+    const s = await gql(
+      `mutation { signup(input: { name: "B", email: "b@test.com", password: "secret123" }) { accessToken } }`,
+    );
+    const me = await gql(`{ me { orderCount totalSpent bookingCount } }`, undefined, {
+      authorization: `Bearer ${s.data.signup.accessToken}`,
+    });
+    expect(me.errors).toBeUndefined();
+    expect(me.data.me).toEqual({ orderCount: 0, totalSpent: 0, bookingCount: 0 });
+  });
+});
+
 describe("cart → order", () => {
   it("computes totals with a promo and settles a mock order", async () => {
     const add = await gql(

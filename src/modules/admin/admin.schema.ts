@@ -14,22 +14,25 @@ import {
 const RoleEnum = builder.enumType("Role", { values: ROLES });
 
 // Per-user aggregates — only computed when a query actually selects them
-// (the list screen doesn't; the detail screen does).
+// (the list screen doesn't; the detail screen does). Visible to admins with
+// `users.view`, and to the user themself (the app's Account screen shows them).
+const selfOrUsersView = (u: UserDoc, _args: unknown, ctx: { user?: { id: string } | null }) =>
+  ctx.user?.id === String(u._id) ? true : { permission: "users.view" };
 builder.objectField(UserRef, "orderCount", (t) =>
   t.int({
-    authScopes: { permission: "users.view" },
+    authScopes: selfOrUsersView,
     resolve: async (u) => (await getUserStats(String(u._id))).orderCount,
   }),
 );
 builder.objectField(UserRef, "totalSpent", (t) =>
   t.float({
-    authScopes: { permission: "users.view" },
+    authScopes: selfOrUsersView,
     resolve: async (u) => (await getUserStats(String(u._id))).totalSpent,
   }),
 );
 builder.objectField(UserRef, "bookingCount", (t) =>
   t.int({
-    authScopes: { permission: "users.view" },
+    authScopes: selfOrUsersView,
     resolve: async (u) => (await getUserStats(String(u._id))).bookingCount,
   }),
 );
