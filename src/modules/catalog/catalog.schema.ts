@@ -56,6 +56,15 @@ ProductRef.implement({
     name: t.field({ type: LocalizedStringRef, resolve: (p) => p.name }),
     tagline: t.field({ type: LocalizedStringRef, resolve: (p) => p.tagline }),
     description: t.field({ type: LocalizedStringRef, resolve: (p) => p.description }),
+    /** Short card / summary text; null when the admin hasn't written one (use the description's first paragraph). */
+    shortDescription: t.field({
+      type: LocalizedStringRef,
+      nullable: true,
+      resolve: (p) => {
+        const s = p.shortDescription;
+        return s && (s.en?.trim() || s.hi?.trim()) ? s : null;
+      },
+    }),
     price: t.exposeFloat("price"),
     mrp: t.exposeFloat("mrp", { nullable: true }),
     currency: t.exposeString("currency"),
@@ -182,6 +191,7 @@ const ProductInput = builder.inputType("ProductInput", {
     name: t.field({ type: "JSON", required: false }),
     tagline: t.field({ type: "JSON", required: false }),
     description: t.field({ type: "JSON", required: false }),
+    shortDescription: t.field({ type: "JSON", required: false }),
     price: t.float({ required: false }),
     mrp: t.float({ required: false }),
     stockQty: t.int({ required: false }),

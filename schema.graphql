@@ -1539,6 +1539,7 @@ type Product {
   reviewsCount: Int
   seo: ResolvedSeo
   seoRaw: SeoMetaRaw
+  shortDescription: LocalizedString
   slug: String
   status: ProductStatus
   stockQty: Int
@@ -1586,6 +1587,7 @@ input ProductInput {
   rating: Float
   reviewsCount: Int
   seo: SeoMetaInput
+  shortDescription: JSON
   slug: String!
   status: ProductStatus
   stockQty: Int

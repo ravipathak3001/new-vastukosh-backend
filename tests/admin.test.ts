@@ -604,3 +604,28 @@ function orderFixture(overrides: { orderNo: string; email: string; status: strin
     timeline: [{ status: overrides.status, at: new Date() }],
   };
 }
+
+describe("product short description", () => {
+  const base = `slug: "short-desc-item", name: { en: "Yantra", hi: "य" }, tagline: { en: "t", hi: "t" },
+    description: { en: "Long intro.\\n\\n## Usage\\nPlace it facing north.", hi: "लंबा" }, price: 100, category: idols, image: "/x.jpg"`;
+
+  it("is null until written, then saved and returned per language", async () => {
+    const created = await gql(`mutation { upsertProduct(input: { ${base} }) { slug } }`, undefined, asAdmin);
+    expect(created.errors).toBeUndefined();
+    let res = await gql(`{ product(slug: "short-desc-item") { shortDescription { en hi } } }`);
+    expect(res.data.product.shortDescription).toBeNull();
+
+    await gql(
+      `mutation { upsertProduct(input: { ${base}, shortDescription: { en: "Brass Shri Yantra for wealth.", hi: "धन हेतु श्री यंत्र।" } }) { slug } }`,
+      undefined,
+      asAdmin,
+    );
+    res = await gql(`{ product(slug: "short-desc-item") { shortDescription { en hi } } }`);
+    expect(res.data.product.shortDescription).toEqual({ en: "Brass Shri Yantra for wealth.", hi: "धन हेतु श्री यंत्र।" });
+
+    // Clearing both languages goes back to "not set".
+    await gql(`mutation { upsertProduct(input: { ${base}, shortDescription: { en: "", hi: "" } }) { slug } }`, undefined, asAdmin);
+    res = await gql(`{ product(slug: "short-desc-item") { shortDescription { en } } }`);
+    expect(res.data.product.shortDescription).toBeNull();
+  });
+});

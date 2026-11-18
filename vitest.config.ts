@@ -10,6 +10,9 @@ export default defineConfig({
     env: {
       SHIPPING_PROVIDER: "mock",
       PAYMENT_PROVIDER: "mock",
+      // Never send real email from tests, whatever SMTP account .env points at.
+      EMAIL_PROVIDER: "mock",
+      MEDIA_STORAGE: "local",
       // Google sign-in tests sign their own tokens; tests/google-signin.test.ts
       // serves the matching public key here.
       GOOGLE_SIGNIN_CLIENT_IDS: "test-web.apps.googleusercontent.com,test-android.apps.googleusercontent.com",

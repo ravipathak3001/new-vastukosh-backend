@@ -37,6 +37,8 @@ const productSchema = new Schema(
     name: { type: localizedSchema, required: true },
     tagline: { type: localizedSchema, required: true },
     description: { type: localizedSchema, required: true },
+    /** 1–2 sentences for product cards and the summary beside the price. Optional — falls back to the description's first paragraph. */
+    shortDescription: { type: localizedSchema, required: false },
     price: { type: Number, required: true, min: 0 },
     mrp: { type: Number, min: 0 },
     currency: { type: String, enum: ["INR"], default: "INR" },
