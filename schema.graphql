@@ -68,6 +68,13 @@ type AdminExpertPayout {
   payout: ExpertPayout
 }
 
+type AdminMediaPage {
+  items: [MediaAsset!]!
+  page: Int!
+  pageSize: Int!
+  total: Int!
+}
+
 input AdminOrderFilter {
   dateFrom: String
   dateTo: String
@@ -985,6 +992,42 @@ type MarketplaceSettings {
   minPayout: Float
 }
 
+type MediaAsset {
+  alt: String!
+  contentType: String!
+  createdAt: DateTime!
+  filename: String!
+  folder: MediaFolder!
+  height: Int
+  id: ID!
+  size: Int!
+  storage: String!
+  url: String!
+  usage: [MediaUsage!]!
+  width: Int
+}
+
+enum MediaFolder {
+  collections
+  content
+  daily
+  experts
+  general
+  products
+}
+
+type MediaSettings {
+  acceptedTypes: [String!]!
+  maxBytes: Int!
+  storage: String!
+}
+
+type MediaUsage {
+  kind: String!
+  label: String!
+  ref: String!
+}
+
 type Mutation {
   addAddress(input: AddressInput!): User
   addToCart(anonId: String, productSlug: String!, qty: Int): Cart
@@ -1012,6 +1055,7 @@ type Mutation {
   deleteDailyVerse(key: String!): Boolean
   deleteFaq(id: ID!): Boolean
   deleteLegalDoc(slug: String!): Boolean
+  deleteMediaAsset(force: Boolean, id: ID!): Boolean!
   deleteMyOffering(id: ID!): Boolean
   deletePromo(code: String!): Boolean
   deleteRedirect(from: String!): Boolean
@@ -1064,6 +1108,7 @@ type Mutation {
   updateBookingStatus(id: ID!, status: BookingStatus!): ConsultationBooking
   updateContactStatus(id: ID!, status: ContactStatus!): ContactSubmission
   updateMarketplaceSettings(commissionPct: Float, minPayout: Float): MarketplaceSettings
+  updateMediaAsset(id: ID!, input: UpdateMediaAssetInput!): MediaAsset!
   updateMyExpertKyc(input: ExpertKycInput!): Expert
   updateMyExpertProfile(input: ExpertProfileInput!): Expert
   updateProfile(localePref: String, name: String, phone: String): User
@@ -1616,6 +1661,9 @@ type Query {
   adminExperts(search: String, status: ExpertStatus): [Expert!]
   adminFaqs: [Faq!]
   adminLegalDocs: [LegalDoc!]
+  adminMedia(folder: MediaFolder, page: Int, pageSize: Int, search: String): AdminMediaPage!
+  adminMediaAsset(id: ID!): MediaAsset
+  adminMediaSettings: MediaSettings!
   adminNewsletterSubscribers(filter: AdminSubscriberFilterInput, page: Int, pageSize: Int): AdminSubscriberPage
   adminOrder(orderNo: String!): Order
   adminOrders(filter: AdminOrderFilter, page: Int, pageSize: Int, sort: AdminOrderSort): AdminOrderPage
@@ -2017,6 +2065,12 @@ input TestimonialInput {
   quote: JSON
   rating: Int!
   wide: Boolean
+}
+
+input UpdateMediaAssetInput {
+  alt: String
+  filename: String
+  folder: MediaFolder
 }
 
 type User {

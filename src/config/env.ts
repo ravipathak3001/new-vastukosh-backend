@@ -87,6 +87,20 @@ const schema = z.object({
   // every visitor's page is fetched from the same few hosting IPs.
   SSR_API_KEY: z.string().optional(),
 
+  // Media library (admin image uploads). `local` writes files to MEDIA_LOCAL_DIR
+  // and serves them at /uploads — fine for development, but most hosts (Render,
+  // Railway, containers) wipe the disk on every deploy. Use `cloudinary` live.
+  MEDIA_STORAGE: z.enum(["local", "cloudinary"]).default("local"),
+  MEDIA_LOCAL_DIR: z.string().min(1).default("uploads"),
+  // Public base URL the local files are served from. Defaults to this API's own /uploads.
+  MEDIA_PUBLIC_URL: z.string().url().optional(),
+  MEDIA_MAX_MB: z.coerce.number().positive().max(50).default(10),
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+  // Every upload goes under this Cloudinary folder (then the library folder, e.g. vastukosh/products).
+  CLOUDINARY_FOLDER: z.string().min(1).default("vastukosh"),
+
   SITE_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_REVALIDATE_URL: z.string().url().optional(),
   REVALIDATE_SECRET: z.string().optional(),
@@ -137,6 +151,15 @@ if (env.NODE_ENV === "production") {
   }
   if (/localhost|127\.0\.0\.1/.test(env.SITE_URL) && process.env.ALLOW_LOCAL_SITE_URL !== "true") {
     problems.push("SITE_URL points at localhost — emails and links would be broken");
+  }
+  if (
+    env.MEDIA_STORAGE === "cloudinary" &&
+    (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET)
+  ) {
+    problems.push("MEDIA_STORAGE=cloudinary needs CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET");
+  }
+  if (env.MEDIA_STORAGE === "local") {
+    warnings.push("MEDIA_STORAGE=local — uploaded images live on this server's disk and are lost if the host wipes it on deploy");
   }
   if (env.EMAIL_PROVIDER === "mock") warnings.push("EMAIL_PROVIDER=mock — no emails will be sent");
   if (!env.ADMIN_NOTIFY_EMAILS) warnings.push("ADMIN_NOTIFY_EMAILS unset — your team won't get new-order / booking alerts");

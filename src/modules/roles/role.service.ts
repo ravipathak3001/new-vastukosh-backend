@@ -72,11 +72,18 @@ export async function deleteRole(id: string): Promise<void> {
   await role.deleteOne();
 }
 
-/** Ensures the seeded system role exists; called once at boot and from the seed script. */
+/**
+ * Ensures the seeded system role exists; called once at boot and from the seed
+ * script. Its permissions are re-synced every time so Super Admins pick up
+ * permissions added after the role was first created (it can't be edited by hand).
+ */
 export async function ensureSuperAdminRole(): Promise<RoleDoc> {
   return RoleModel.findOneAndUpdate(
     { isSystem: true },
-    { $setOnInsert: { name: "Super Admin", permissions: ALL_PERMISSION_KEYS, isSystem: true } },
+    {
+      $setOnInsert: { name: "Super Admin", isSystem: true },
+      $set: { permissions: ALL_PERMISSION_KEYS },
+    },
     { new: true, upsert: true },
   );
 }

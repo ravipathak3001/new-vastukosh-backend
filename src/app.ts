@@ -18,6 +18,7 @@ import { formatError } from "./graphql/errors.js";
 import { healthRouter } from "./shared/http/health.js";
 import { paymentRouter } from "./modules/payment/payment.routes.js";
 import { shippingRouter } from "./modules/shipping/shipping.routes.js";
+import { mediaRouter } from "./modules/media/media.routes.js";
 
 export type CreatedApp = {
   app: express.Express;
@@ -50,6 +51,8 @@ export async function createApp(httpServer?: Server): Promise<CreatedApp> {
   // Payment webhooks need the raw body — mount before the JSON parser.
   app.use(paymentRouter);
   app.use(shippingRouter);
+  // Image uploads are raw bodies too (and /uploads serves the local files).
+  app.use(mediaRouter);
   app.use(healthRouter);
 
   const apollo = new ApolloServer<Context>({

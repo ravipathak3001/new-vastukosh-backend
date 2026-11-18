@@ -6,3 +6,6 @@ dist/
 coverage/
 .DS_Store
 .mongodb-memory-server/
+
+# Media library files when MEDIA_STORAGE=local
+uploads/

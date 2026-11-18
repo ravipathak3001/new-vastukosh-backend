@@ -15,6 +15,8 @@ export default defineConfig({
       GOOGLE_SIGNIN_CLIENT_IDS: "test-web.apps.googleusercontent.com,test-android.apps.googleusercontent.com",
       GOOGLE_JWKS_URL: "http://127.0.0.1:45991/certs",
       ADMIN_NOTIFY_EMAILS: "team@vastukosh.test",
+      // Keep HTTP-level tests (supertest) from printing every request.
+      LOG_LEVEL: "warn",
     },
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
     testTimeout: 30_000,

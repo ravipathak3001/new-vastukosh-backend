@@ -60,6 +60,13 @@ export const PERMISSION_CATALOG = [
     label: "Edit daily mantras, Sanskrit verses, and shareable cards",
   },
 
+  { key: "media.view", category: "Media", label: "Browse the image library" },
+  {
+    key: "media.manage",
+    category: "Media",
+    label: "Upload, rename and delete images",
+  },
+
   { key: "marketing.view", category: "Marketing", label: "View contact inbox and subscribers" },
   {
     key: "marketing.manage",
