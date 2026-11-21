@@ -1078,6 +1078,7 @@ type Mutation {
   rejectPayout(id: ID!, note: String!): ExpertPayout
   rejectReturn(note: String, returnNo: String!): Return
   removeAddress(addressId: ID!): User
+  removeAvatar: User
   removeFromCart(anonId: String, productSlug: String!): Cart
   requestPasswordReset(email: String!): Boolean
   requestPayout(amount: Float!): ExpertPayout
@@ -2077,6 +2078,7 @@ input UpdateMediaAssetInput {
 
 type User {
   addresses: [Address!]
+  avatarUrl: String
   birthDetails: BirthDetails
   bookingCount: Int
   createdAt: DateTime

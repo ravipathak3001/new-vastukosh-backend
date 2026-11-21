@@ -61,6 +61,11 @@ const userSchema = new Schema(
     referralCode: { type: String, required: true, unique: true, index: true },
     referredBy: { type: String, default: "" },
     emailVerified: { type: Boolean, default: false },
+    /** Profile picture (see `modules/user/avatar.service.ts`). Empty = none — show initials. */
+    avatarUrl: { type: String, default: "" },
+    /** Storage-provider key + provider for `avatarUrl`, so a replaced picture's file can be deleted. */
+    avatarKey: { type: String, default: "" },
+    avatarStorage: { type: String, default: "" },
   },
   { timestamps: true },
 );

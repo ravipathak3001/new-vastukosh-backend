@@ -19,6 +19,7 @@ import { healthRouter } from "./shared/http/health.js";
 import { paymentRouter } from "./modules/payment/payment.routes.js";
 import { shippingRouter } from "./modules/shipping/shipping.routes.js";
 import { mediaRouter } from "./modules/media/media.routes.js";
+import { avatarRouter } from "./modules/user/avatar.routes.js";
 
 export type CreatedApp = {
   app: express.Express;
@@ -53,6 +54,7 @@ export async function createApp(httpServer?: Server): Promise<CreatedApp> {
   app.use(shippingRouter);
   // Image uploads are raw bodies too (and /uploads serves the local files).
   app.use(mediaRouter);
+  app.use(avatarRouter);
   app.use(healthRouter);
 
   const apollo = new ApolloServer<Context>({

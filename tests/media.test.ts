@@ -175,3 +175,48 @@ describe("media library GraphQL", () => {
     expect(await MediaAssetModel.countDocuments()).toBe(0);
   });
 });
+
+describe("profile photos (POST /me/avatar)", () => {
+  async function makeUser() {
+    const { UserModel } = await import("../src/modules/auth/auth.model.js");
+    const u = await UserModel.create({ email: "seeker@test.com", name: "Asha Devi", referralCode: "ASHA01" });
+    const auth = `Bearer ${signAccessToken({ sub: String(u._id), roles: ["customer"], permissions: [] })}`;
+    return { id: String(u._id), auth };
+  }
+  const post = (body: Buffer, auth?: string) => {
+    const r = request(app).post("/me/avatar").set("content-type", "image/jpeg");
+    if (auth) r.set("authorization", auth);
+    return r.send(body);
+  };
+
+  it("lets any signed-in customer set, replace and remove their own photo", async () => {
+    const { auth } = await makeUser();
+
+    const first = await post(JPEG, auth);
+    expect(first.status).toBe(200);
+    expect(first.body.avatarUrl).toMatch(/^https:\/\/media\.test\/avatars\/[a-f0-9]{24}-[\w-]{8}\.jpg$/);
+    expect(storage.files.size).toBe(1);
+
+    const me = await gql(`{ me { avatarUrl } }`, undefined, { authorization: auth });
+    expect(me.data.me.avatarUrl).toBe(first.body.avatarUrl);
+
+    // Replacing deletes the old file — one file per user, ever.
+    const second = await post(PNG, auth);
+    expect(second.status).toBe(200);
+    expect(second.body.avatarUrl).not.toBe(first.body.avatarUrl);
+    expect(storage.files.size).toBe(1);
+
+    const removed = await gql(`mutation { removeAvatar { avatarUrl } }`, undefined, { authorization: auth });
+    expect(removed.data.removeAvatar.avatarUrl).toBeNull();
+    expect(storage.files.size).toBe(0);
+    // Uploads never appear in the admin's media library.
+    expect(await MediaAssetModel.countDocuments()).toBe(0);
+  });
+
+  it("rejects signed-out callers and non-images", async () => {
+    const { auth } = await makeUser();
+    expect((await post(JPEG)).status).toBe(401);
+    expect((await post(Buffer.from("<svg onload=alert(1)>".padEnd(40)), auth)).status).toBe(400);
+    expect(storage.files.size).toBe(0);
+  });
+});

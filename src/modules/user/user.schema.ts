@@ -10,6 +10,7 @@ import {
   updateAddress,
   updateProfile,
 } from "./user.service.js";
+import { removeAvatar } from "./avatar.service.js";
 
 // Address subdocument
 type AddressShape = UserDoc["addresses"][number];
@@ -51,6 +52,8 @@ export const UserRef = builder.objectRef<UserDoc>("User").implement({
     karmaPoints: t.exposeInt("karmaPoints"),
     referralCode: t.exposeString("referralCode"),
     emailVerified: t.exposeBoolean("emailVerified"),
+    /** Profile picture URL, or null when the user hasn't set one (show initials). */
+    avatarUrl: t.string({ nullable: true, resolve: (u) => u.avatarUrl || null }),
     birthDetails: t.field({
       type: BirthDetailsRef,
       nullable: true,
@@ -83,6 +86,12 @@ function requireUser(ctx: { user: { id: string } | null }): string {
 
 export function registerUserModule() {
   builder.mutationFields((t) => ({
+    /** Remove the signed-in user's profile picture. Uploading is `POST /me/avatar`. */
+    removeAvatar: t.field({
+      type: UserRef,
+      authScopes: { loggedIn: true },
+      resolve: (_root, _args, ctx) => removeAvatar(requireUser(ctx)),
+    }),
     updateProfile: t.field({
       type: UserRef,
       authScopes: { loggedIn: true },

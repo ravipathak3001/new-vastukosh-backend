@@ -184,8 +184,9 @@ describe("booking emails", () => {
       { i: { kind: "consultation", serviceKey: "astro", date: d.toISOString().slice(0, 10), slot: "10:30", name: "Vikram", email: "vikram@test.com", phone: "9822200000" } },
     );
     expect(res.errors).toBeUndefined();
-    expect(await kinds("vikram@test.com")).toEqual(["booking.received"]);
-    expect(await kinds(TEAM)).toEqual(["admin.new_booking"]);
+    // Free bookings queue these in the background (`void send…`) — wait for them.
+    await vi.waitFor(async () => expect(await kinds("vikram@test.com")).toEqual(["booking.received"]));
+    await vi.waitFor(async () => expect(await kinds(TEAM)).toEqual(["admin.new_booking"]));
   });
 
   it("reminds the customer an hour before a confirmed session, exactly once", async () => {
