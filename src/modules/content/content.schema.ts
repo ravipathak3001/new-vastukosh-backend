@@ -1,3 +1,4 @@
+import { fillFaq, fillLegalDoc, loadTokenValues } from "./site-tokens.js";
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
 import { resolveSeo } from "../seo/seo.service.js";
@@ -99,17 +100,30 @@ export function registerContentModule() {
     }),
     faqs: t.field({
       type: [FaqRef],
-      resolve: () => FaqModel.find({ published: true }).sort({ order: 1 }).exec(),
+      // `{{phone}}`-style placeholders filled from Site settings — see site-tokens.ts.
+      resolve: async () => {
+        const [docs, values] = await Promise.all([
+          FaqModel.find({ published: true }).sort({ order: 1 }).exec(),
+          loadTokenValues(),
+        ]);
+        return docs.map((d) => fillFaq(d, values));
+      },
     }),
     legalDocs: t.field({
       type: [LegalDocRef],
-      resolve: () => LegalDocModel.find().sort({ slug: 1 }).exec(),
+      resolve: async () => {
+        const [docs, values] = await Promise.all([LegalDocModel.find().sort({ slug: 1 }).exec(), loadTokenValues()]);
+        return docs.map((d) => fillLegalDoc(d, values));
+      },
     }),
     legalDoc: t.field({
       type: LegalDocRef,
       nullable: true,
       args: { slug: t.arg.string({ required: true }) },
-      resolve: (_p, { slug }) => LegalDocModel.findOne({ slug }).exec(),
+      resolve: async (_p, { slug }) => {
+        const [doc, values] = await Promise.all([LegalDocModel.findOne({ slug }).exec(), loadTokenValues()]);
+        return doc ? fillLegalDoc(doc, values) : null;
+      },
     }),
     page: t.field({
       type: PageRef,

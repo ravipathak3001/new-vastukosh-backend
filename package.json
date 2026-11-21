@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Vastukosh API — Node.js + TypeScript + MongoDB + GraphQL (Pothos code-first). Modular, client-agnostic (web + future mobile).",
+  "description": "Vastukosh API \u2014 Node.js + TypeScript + MongoDB + GraphQL (Pothos code-first). Modular, client-agnostic (web + future mobile).",
   "engines": {
     "node": ">=20"
   },
@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "content:tokens": "tsx src/scripts/content-use-site-tokens.ts"
   },
   "dependencies": {
     "@apollo/server": "5.5.1",

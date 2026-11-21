@@ -629,3 +629,31 @@ describe("product short description", () => {
     expect(res.data.product.shortDescription).toBeNull();
   });
 });
+
+describe("site-settings placeholders in legal docs and FAQs", () => {
+  it("fills {{phone}} etc. for customers, keeps them raw for the admin, and follows settings changes", async () => {
+    const { LegalDocModel, FaqModel } = await import("../src/modules/content/content.model.js");
+    const { SiteSettingsModel } = await import("../src/modules/seo/site-settings.model.js");
+    await SiteSettingsModel.create({ key: "default", name: "Vastukosh", domain: "vastukosh.com", email: "help@vk.in", phone: "+91 96020 11215", addressText: "Jaipur 302012" });
+    await LegalDocModel.create({
+      slug: "privacy",
+      title: { en: "Privacy", hi: "गोपनीयता" },
+      sections: [{ heading: { en: "Contact", hi: "संपर्क" }, body: { en: "Write to {{email}} or call {{phone}}. Office: {{address}}. {{typo}}", hi: "{{email}} पर लिखें" } }],
+    });
+    await FaqModel.create({ key: "help", question: { en: "Help?", hi: "?" }, answer: { en: "WhatsApp {{whatsapp}}", hi: "-" }, published: true });
+
+    let pub = await gql(`{ legalDoc(slug: "privacy") { sections { body { en hi } } } faqs { answer { en } } }`);
+    expect(pub.data.legalDoc.sections[0].body).toEqual({
+      en: "Write to help@vk.in or call +91 96020 11215. Office: Jaipur 302012. {{typo}}",
+      hi: "help@vk.in पर लिखें",
+    });
+    expect(pub.data.faqs[0].answer.en).toBe("WhatsApp https://wa.me/919602011215");
+
+    const admin = await gql(`{ adminLegalDocs { sections { body { en } } } }`, undefined, asAdmin);
+    expect(admin.data.adminLegalDocs[0].sections[0].body.en).toContain("{{email}} or call {{phone}}");
+
+    await SiteSettingsModel.updateOne({ key: "default" }, { $set: { phone: "+91 90000 00000" } });
+    pub = await gql(`{ legalDoc(slug: "privacy") { sections { body { en } } } }`);
+    expect(pub.data.legalDoc.sections[0].body.en).toContain("call +91 90000 00000");
+  });
+});

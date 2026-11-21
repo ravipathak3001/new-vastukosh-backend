@@ -56,7 +56,8 @@ export function registerSeoAdminModule() {
           { $set: input },
           { new: true, upsert: true, setDefaultsOnInsert: true },
         );
-        await notifyFrontendRevalidate(["site-settings"]);
+        // "content" too: policies and FAQs show {{phone}}, {{email}}… from these settings.
+        await notifyFrontendRevalidate(["site-settings", "content"]);
         return doc;
       },
     }),
