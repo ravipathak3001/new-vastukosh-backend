@@ -5,6 +5,7 @@
  *
  *   npm run content:tokens            # preview only — changes nothing
  *   npm run content:tokens -- --apply # write the changes
+ *   npm run content:tokens -- --apply --only=terms   # just one legal doc
  *
  * Replaces the original placeholder details (+91 98765 43210,
  * support@vastukosh.com, 108 Harmony Way…) and also whatever is currently
@@ -15,6 +16,8 @@ import { FaqModel, LegalDocModel } from "../modules/content/content.model.js";
 import { SiteSettingsModel } from "../modules/seo/site-settings.model.js";
 
 const apply = process.argv.includes("--apply");
+/** `--only=terms` limits the run to one legal doc (by slug) — handy for a first, single-page check. */
+const only = process.argv.find((a) => a.startsWith("--only="))?.slice("--only=".length);
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Match a phone number however it's spaced: "+91 98765 43210", "+919876543210", "98765-43210". */
@@ -72,7 +75,7 @@ async function main() {
   };
 
   console.log(apply ? "Applying changes…" : "Preview (nothing is written — add --apply to save):");
-  for (const doc of await LegalDocModel.find()) {
+  for (const doc of await LegalDocModel.find(only ? { slug: only } : {})) {
     const c = new Map<string, number>();
     swapL(doc.title, c);
     for (const sec of doc.sections) {
@@ -85,7 +88,7 @@ async function main() {
       await doc.save();
     }
   }
-  for (const doc of await FaqModel.find()) {
+  for (const doc of only ? [] : await FaqModel.find()) {
     const c = new Map<string, number>();
     swapL(doc.question, c);
     swapL(doc.answer, c);
