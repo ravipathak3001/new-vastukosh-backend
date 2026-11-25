@@ -217,3 +217,85 @@ describe("panchangTimeline query", () => {
     expect(res.data.panchangTimeline.tithiSegments.length).toBeGreaterThan(0);
   });
 });
+
+describe("vrats and festivals", () => {
+  const DELHI = `latitude: 28.6139, longitude: 77.209, timezone: "Asia/Kolkata"`;
+  const keysOn = async (date: string) => {
+    const res = await gql(`{ panchang(date: "${date}", ${DELHI}) { observances { key kind name { en hi } about { en } } } }`);
+    expect(res.errors).toBeUndefined();
+    return res.data.panchang.observances.map((o: { key: string }) => o.key);
+  };
+
+  it("places 2026 festivals on the dates printed calendars use", async () => {
+    // Each case exercises a different deciding rule.
+    expect(await keysOn("2026-11-08")).toContain("diwali"); // pradosh
+    expect(await keysOn("2026-09-14")).toContain("ganesh-chaturthi"); // midday
+    expect(await keysOn("2026-10-20")).toContain("dussehra"); // afternoon
+    expect(await keysOn("2026-02-15")).toContain("maha-shivaratri"); // midnight
+    expect(await keysOn("2026-10-29")).toContain("karwa-chauth"); // moonrise
+    expect(await keysOn("2026-01-14")).toContain("sankranti-makara");
+  });
+
+  it("moves Raksha Bandhan and Holika Dahan out of Bhadra", async () => {
+    expect(await keysOn("2026-08-27")).not.toContain("raksha-bandhan");
+    expect(await keysOn("2026-08-28")).toContain("raksha-bandhan");
+    expect(await keysOn("2026-03-02")).not.toContain("holika-dahan");
+    expect(await keysOn("2026-03-03")).toContain("holika-dahan");
+  });
+
+  it("falls back to the sunrise tithi when it misses its deciding moment (Janmashtami 2026)", async () => {
+    expect(await keysOn("2026-09-03")).not.toContain("janmashtami");
+    expect(await keysOn("2026-09-04")).toContain("janmashtami");
+  });
+});
+
+describe("panchangMonth query", () => {
+  const MONTH = `query ($y: Int!, $m: Int!) {
+    panchangMonth(year: $y, month: $m, latitude: 28.6139, longitude: 77.209, timezone: "Asia/Kolkata") {
+      year month timezone
+      days { date vara { en } tithi { index name { en } } observances { key } }
+    }
+  }`;
+
+  it("returns every day of the month, and each festival exactly once a year", async () => {
+    const feb = await gql(MONTH, { y: 2026, m: 2 });
+    expect(feb.data.panchangMonth.days).toHaveLength(28);
+    expect(feb.data.panchangMonth.days[0].date).toBe("2026-02-01");
+
+    const year = (await Promise.all(
+      Array.from({ length: 12 }, (_, i) => gql(MONTH, { y: 2026, m: i + 1 })),
+    )).flatMap((r) => r.data.panchangMonth.days);
+    expect(year).toHaveLength(365);
+    for (const key of ["diwali", "maha-shivaratri", "ganesh-chaturthi", "raksha-bandhan", "janmashtami", "dussehra"]) {
+      expect(year.filter((d: { observances: { key: string }[] }) => d.observances.some((o) => o.key === key))).toHaveLength(1);
+    }
+    const ekadashis = year.filter((d: { observances: { key: string }[] }) => d.observances.some((o) => o.key === "ekadashi"));
+    expect(ekadashis.length).toBeGreaterThanOrEqual(24);
+  });
+
+  it("rejects a bad month and polar latitudes", async () => {
+    expect((await gql(MONTH, { y: 2026, m: 13 })).errors?.[0]?.message).toMatch(/month/);
+    const polar = await gql(`{ panchang(latitude: 78.2, longitude: 15.6, timezone: "Arctic/Longyearbyen") { date } }`);
+    expect(polar.errors?.[0]?.message).toMatch(/latitude/);
+  });
+});
+
+describe("panchang places", () => {
+  it("finds towns by English or Hindi name, Indian places first", async () => {
+    const res = await gql(`{ a: panchangPlaces(query: "delhi", limit: 3) { name region country timezone }
+                             b: panchangPlaces(query: "वाराणसी") { name }
+                             c: panchangPlaces(query: "new york", limit: 1) { name timezone }
+                             d: panchangPlaces(query: "x") { name } }`);
+    expect(res.data.a[0]).toMatchObject({ name: "Delhi", country: "IN", timezone: "Asia/Kolkata" });
+    expect(res.data.b[0].name).toBe("Varanasi");
+    expect(res.data.c[0]).toMatchObject({ name: "New York City", timezone: "America/New_York" });
+    expect(res.data.d).toEqual([]);
+  });
+
+  it("names the nearest town to a point, or nothing in open sea", async () => {
+    const res = await gql(`{ near: panchangNearestPlace(latitude: 26.85, longitude: 80.95) { name }
+                             sea: panchangNearestPlace(latitude: -40, longitude: -120) { name } }`);
+    expect(res.data.near.name).toBe("Lucknow");
+    expect(res.data.sea).toBeNull();
+  });
+});

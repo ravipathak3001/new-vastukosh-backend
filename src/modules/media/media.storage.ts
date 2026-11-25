@@ -27,7 +27,8 @@ export type PutFileInput = {
 export interface MediaStorage {
   readonly name: "local" | "cloudinary";
   put(input: PutFileInput): Promise<StoredFile>;
-  remove(storageKey: string): Promise<void>;
+  /** `contentType` lets providers that file audio separately (Cloudinary) find it. */
+  remove(storageKey: string, contentType?: string): Promise<void>;
 }
 
 // ─── Local disk ───────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ export class LocalMediaStorage implements MediaStorage {
     return { storageKey, url: `${this.publicBase}/${storageKey}` };
   }
 
-  async remove(storageKey: string): Promise<void> {
+  async remove(storageKey: string, _contentType?: string): Promise<void> {
     await rm(this.resolve(storageKey), { force: true });
   }
 
@@ -87,8 +88,10 @@ export class CloudinaryMediaStorage implements MediaStorage {
 
   constructor(private readonly config: CloudinaryConfig) {}
 
-  private endpoint(action: "upload" | "destroy"): string {
-    return `https://api.cloudinary.com/v1_1/${encodeURIComponent(this.config.cloudName)}/image/${action}`;
+  /** Cloudinary files audio under the "video" resource type. */
+  private endpoint(action: "upload" | "destroy", contentType = "image/"): string {
+    const resource = contentType.startsWith("audio/") ? "video" : "image";
+    return `https://api.cloudinary.com/v1_1/${encodeURIComponent(this.config.cloudName)}/${resource}/${action}`;
   }
 
   private signed(params: Record<string, string>): FormData {
@@ -107,7 +110,7 @@ export class CloudinaryMediaStorage implements MediaStorage {
     });
     form.set("file", new Blob([new Uint8Array(body)], { type: contentType }), "upload");
 
-    const res = await fetch(this.endpoint("upload"), { method: "POST", body: form });
+    const res = await fetch(this.endpoint("upload", contentType), { method: "POST", body: form });
     const json = (await res.json().catch(() => ({}))) as {
       public_id?: string;
       secure_url?: string;
@@ -117,23 +120,23 @@ export class CloudinaryMediaStorage implements MediaStorage {
     };
     if (!res.ok || !json.public_id || !json.secure_url) {
       logger.error({ status: res.status, error: json.error }, "Cloudinary upload failed");
-      throw new AppError("INTERNAL", `Image storage rejected the upload${json.error?.message ? `: ${json.error.message}` : ""}`);
+      throw new AppError("INTERNAL", `Media storage rejected the upload${json.error?.message ? `: ${json.error.message}` : ""}`);
     }
     return { storageKey: json.public_id, url: json.secure_url, width: json.width, height: json.height };
   }
 
-  async remove(storageKey: string): Promise<void> {
+  async remove(storageKey: string, contentType?: string): Promise<void> {
     const form = this.signed({
       invalidate: "true",
       public_id: storageKey,
       timestamp: String(Math.floor(Date.now() / 1000)),
     });
-    const res = await fetch(this.endpoint("destroy"), { method: "POST", body: form });
+    const res = await fetch(this.endpoint("destroy", contentType), { method: "POST", body: form });
     const json = (await res.json().catch(() => ({}))) as { result?: string };
     // "not found" = already gone, which is the outcome we wanted.
     if (!res.ok || (json.result !== "ok" && json.result !== "not found")) {
       logger.error({ status: res.status, result: json.result, storageKey }, "Cloudinary delete failed");
-      throw new AppError("INTERNAL", "Couldn't delete the image from storage — try again");
+      throw new AppError("INTERNAL", "Couldn't delete the file from storage — try again");
     }
   }
 }

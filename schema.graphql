@@ -459,6 +459,11 @@ type DailyMantra {
   sanskrit: String
   title: LocalizedString
   transliteration: String
+
+  """
+  0 = Sunday … 6 = Saturday — the weekday this mantra is shown on, if any.
+  """
+  weekday: Int
 }
 
 input DailyMantraInput {
@@ -474,6 +479,32 @@ input DailyMantraInput {
   sanskrit: String
   title: JSON
   transliteration: String
+  weekday: Int
+}
+
+type DailyVastuTip {
+  area: LocalizedString
+  body: LocalizedString
+  date: String
+  icon: String
+  id: ID
+  image: String
+  key: String
+  order: Int
+  published: Boolean
+  title: LocalizedString
+}
+
+input DailyVastuTipInput {
+  area: JSON
+  body: JSON
+  date: String
+  icon: String
+  image: String
+  key: String!
+  order: Int
+  published: Boolean
+  title: JSON
 }
 
 type DailyVerse {
@@ -1016,8 +1047,15 @@ enum MediaFolder {
   products
 }
 
+"""Filter the library to images or audio files."""
+enum MediaKind {
+  audio
+  image
+}
+
 type MediaSettings {
   acceptedTypes: [String!]!
+  maxAudioBytes: Int!
   maxBytes: Int!
   storage: String!
 }
@@ -1052,6 +1090,7 @@ type Mutation {
   deleteCollection(slug: String!): Boolean
   deleteDailyCard(key: String!): Boolean
   deleteDailyMantra(key: String!): Boolean
+  deleteDailyVastuTip(key: String!): Boolean
   deleteDailyVerse(key: String!): Boolean
   deleteFaq(id: ID!): Boolean
   deleteLegalDoc(slug: String!): Boolean
@@ -1121,6 +1160,7 @@ type Mutation {
   upsertConsultationService(input: ConsultationServiceInput!): ConsultationService
   upsertDailyCard(input: DailyCardInput!): DailyCard
   upsertDailyMantra(input: DailyMantraInput!): DailyMantra
+  upsertDailyVastuTip(input: DailyVastuTipInput!): DailyVastuTip
   upsertDailyVerse(input: DailyVerseInput!): DailyVerse
   upsertFaq(input: FaqInput!): Faq
   upsertLegalDoc(input: LegalDocInput!): LegalDoc
@@ -1290,6 +1330,9 @@ type Panchang {
 
   """End of the vara."""
   nextSunrise: DateTime
+
+  """Vrats, festivals and sankranti falling on this civil day."""
+  observances: [PanchangObservance!]
   paksha: LocalizedString
 
   """
@@ -1336,6 +1379,28 @@ type PanchangAnga {
   start: DateTime
 }
 
+"""One day of a month calendar, as it stands at sunrise."""
+type PanchangDay {
+  date: String
+  masa: LocalizedString
+  moonrise: DateTime
+  nakshatra: LocalizedString
+  observances: [PanchangObservance!]
+  paksha: LocalizedString
+  sunrise: DateTime
+  sunset: DateTime
+  tithi: PanchangDayTithi
+  vara: LocalizedString
+}
+
+type PanchangDayTithi {
+  end: DateTime
+
+  """1–15 Shukla, 16–30 Krishna (30 = Amavasya)."""
+  index: Int
+  name: LocalizedString
+}
+
 """A named window of the day — a muhurta or a kaala."""
 type PanchangKaala {
   end: DateTime
@@ -1352,9 +1417,49 @@ type PanchangLocation {
   place: String
 }
 
+type PanchangMonth {
+  days: [PanchangDay!]
+  location: PanchangLocation
+  month: Int
+  timezone: String
+  year: Int
+}
+
 enum PanchangMonthSystem {
   amanta
   purnimanta
+}
+
+"""
+A vrat, festival or sankranti on a day. Decided by the tithi at the observance's traditional time (sunrise, midday, pradosh, midnight or moonrise); regional calendars can differ by a day in edge years.
+"""
+type PanchangObservance {
+  """One or two lines on what is observed."""
+  about: LocalizedString
+
+  """Stable id, e.g. `ekadashi`, `diwali`, `sankranti-makara`."""
+  key: String
+  kind: PanchangObservanceKind
+  name: LocalizedString
+}
+
+enum PanchangObservanceKind {
+  festival
+  sankranti
+  vrat
+}
+
+"""A town or city with coordinates and timezone (GeoNames, CC BY 4.0)."""
+type PanchangPlace {
+  """ISO 3166 alpha-2 code."""
+  country: String
+  countryName: String
+  latitude: Float
+  longitude: Float
+  name: String
+  nameHi: String
+  region: String
+  timezone: String
 }
 
 """
@@ -1655,6 +1760,7 @@ type Query {
   adminContactSubmissions(filter: AdminContactFilterInput, page: Int, pageSize: Int): AdminContactPage
   adminDailyCards: [DailyCard!]
   adminDailyMantras: [DailyMantra!]
+  adminDailyVastuTips: [DailyVastuTip!]
   adminDailyVerses: [DailyVerse!]
   adminDashboard: AdminDashboardStats
   adminExpert(id: ID!): Expert
@@ -1664,7 +1770,7 @@ type Query {
   adminExperts(search: String, status: ExpertStatus): [Expert!]
   adminFaqs: [Faq!]
   adminLegalDocs: [LegalDoc!]
-  adminMedia(folder: MediaFolder, page: Int, pageSize: Int, search: String): AdminMediaPage!
+  adminMedia(folder: MediaFolder, kind: MediaKind, page: Int, pageSize: Int, search: String): AdminMediaPage!
   adminMediaAsset(id: ID!): MediaAsset
   adminMediaSettings: MediaSettings!
   adminNewsletterSubscribers(filter: AdminSubscriberFilterInput, page: Int, pageSize: Int): AdminSubscriberPage
@@ -1694,6 +1800,10 @@ type Query {
   consultationServices: [ConsultationService!]
   dailyCards(limit: Int): [DailyCard!]
   dailyMantra: DailyMantra
+
+  """All published mantras — weekday ones first (Sunday → Saturday)."""
+  dailyMantras: [DailyMantra!]
+  dailyVastuTip: DailyVastuTip
   dailyVerse: DailyVerse
   expert(slug: String!): Expert
   expertReviews(limit: Int, slug: String!): [ExpertReview!]
@@ -1768,6 +1878,34 @@ type Query {
   ): Panchang
 
   """
+  Every day of a Gregorian month at a place (at sunrise), with vrats and festivals. Location defaults to New Delhi.
+  """
+  panchangMonth(
+    latitude: Float
+    longitude: Float
+
+    """1–12"""
+    month: Int!
+    monthSystem: PanchangMonthSystem
+    timezone: String
+    year: Int!
+  ): PanchangMonth
+
+  """
+  The listed town nearest to a point, e.g. the visitor's device location. Null when nothing is within ~150 km.
+  """
+  panchangNearestPlace(latitude: Float!, longitude: Float!): PanchangPlace
+
+  """
+  Search towns and cities by name (English or Devanagari) — for picking a panchang location.
+  """
+  panchangPlaces(
+    """Default 8, max 20."""
+    limit: Int
+    query: String!
+  ): [PanchangPlace!]
+
+  """
   The full sunrise-to-next-sunrise day for a location, broken into every segment each anga occupies — for a day-chart view. All args are optional; unset location falls back to the server's configured default (New Delhi).
   """
   panchangTimeline(
@@ -1802,6 +1940,7 @@ type Query {
   stone(slug: String!): Stone
   stones(filter: StoneFilterInput): [Stone!]
   testimonials(featuredOnly: Boolean): [Testimonial!]
+  vastuTips: [DailyVastuTip!]
 }
 
 type Rashi {

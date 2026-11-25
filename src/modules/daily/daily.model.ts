@@ -7,10 +7,12 @@ import { localizedSchema } from "../../shared/localized.js";
  *  - DailyMantra  — a mantra with audio the app plays
  *  - DailyVerse   — a Sanskrit shloka with transliteration + meaning
  *  - DailyCard    — a shareable image for WhatsApp status / social
+ *  - DailyVastuTip — a short Vastu Shastra tip (website ticker + /vastu-tips)
  *
  * Each doc may pin an explicit `date` (yyyy-mm-dd) to be *the* pick for that
- * day; otherwise a deterministic day-of-year rotation over published docs is
- * used, so every day resolves to something.
+ * day; mantras may also be tied to a weekday. Otherwise a deterministic
+ * day-of-year rotation over published docs is used, so every day resolves to
+ * something.
  */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,6 +38,8 @@ const dailyMantraSchema = new Schema(
     audioUrl: { type: String, default: "", trim: true },
     durationSeconds: { type: Number, default: 0 },
     artwork: { type: String, default: "", trim: true },
+    /** 0 = Sunday … 6 = Saturday: the weekday this mantra belongs to (e.g. Tuesday → Hanuman). */
+    weekday: { type: Number, default: null, min: 0, max: 6, index: true },
     date: dateField,
     order: { type: Number, default: 0 },
     published: { type: Boolean, default: false, index: true },
@@ -80,3 +84,25 @@ const dailyCardSchema = new Schema(
 export type DailyCard = InferSchemaType<typeof dailyCardSchema>;
 export type DailyCardDoc = HydratedDocument<DailyCard>;
 export const DailyCardModel = defineModel("DailyCard", dailyCardSchema);
+
+// ─── Daily Vastu tip ──────────────────────────────────────────────────────
+const dailyVastuTipSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, trim: true },
+    /** Where in the home it applies, e.g. "Kitchen" / "रसोई". */
+    area: { type: localizedSchema, required: true },
+    /** One line — what the website ticker shows. */
+    title: { type: localizedSchema, required: true },
+    body: { type: localizedSchema, required: true },
+    /** Material Symbols icon name, e.g. "bed", "explore". */
+    icon: { type: String, default: "explore", trim: true },
+    image: { type: String, default: "", trim: true },
+    date: dateField,
+    order: { type: Number, default: 0 },
+    published: { type: Boolean, default: false, index: true },
+  },
+  { timestamps: true },
+);
+export type DailyVastuTip = InferSchemaType<typeof dailyVastuTipSchema>;
+export type DailyVastuTipDoc = HydratedDocument<DailyVastuTip>;
+export const DailyVastuTipModel = defineModel("DailyVastuTip", dailyVastuTipSchema);

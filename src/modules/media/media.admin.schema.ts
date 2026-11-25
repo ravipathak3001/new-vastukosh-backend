@@ -2,7 +2,7 @@ import { builder } from "../../graphql/builder.js";
 import type { Paged } from "../../graphql/admin-common.js";
 import { env } from "../../config/env.js";
 import { MEDIA_FOLDERS, type MediaAssetDoc } from "./media.model.js";
-import { ACCEPTED_IMAGE_TYPES, deleteMedia, getMedia, findMediaUsage, listMedia, updateMedia, type MediaUsage } from "./media.service.js";
+import { ACCEPTED_MEDIA_TYPES, deleteMedia, getMedia, findMediaUsage, listMedia, updateMedia, type MediaUsage } from "./media.service.js";
 
 /**
  * Media library — admin only. Uploading is a plain HTTP endpoint
@@ -38,6 +38,11 @@ const MediaAssetRef = builder.objectRef<MediaAssetDoc>("MediaAsset").implement({
   }),
 });
 
+const MediaKindEnum = builder.enumType("MediaKind", {
+  values: ["image", "audio"] as const,
+  description: "Filter the library to images or audio files.",
+});
+
 const AdminMediaPage = builder.objectRef<Paged<MediaAssetDoc>>("AdminMediaPage").implement({
   fields: (t) => ({
     items: t.field({ nullable: false, type: [MediaAssetRef], resolve: (p) => p.items }),
@@ -48,11 +53,12 @@ const AdminMediaPage = builder.objectRef<Paged<MediaAssetDoc>>("AdminMediaPage")
 });
 
 const MediaSettingsRef = builder
-  .objectRef<{ storage: string; maxBytes: number; acceptedTypes: string[] }>("MediaSettings")
+  .objectRef<{ storage: string; maxBytes: number; maxAudioBytes: number; acceptedTypes: string[] }>("MediaSettings")
   .implement({
     fields: (t) => ({
       storage: t.exposeString("storage", { nullable: false }),
       maxBytes: t.exposeInt("maxBytes", { nullable: false }),
+      maxAudioBytes: t.exposeInt("maxAudioBytes", { nullable: false }),
       acceptedTypes: t.exposeStringList("acceptedTypes", { nullable: false }),
     }),
   });
@@ -74,6 +80,7 @@ export function registerMediaAdminModule() {
       args: {
         search: t.arg.string({ required: false }),
         folder: t.arg({ type: MediaFolderEnum, required: false }),
+        kind: t.arg({ type: MediaKindEnum, required: false }),
         page: t.arg.int({ required: false }),
         pageSize: t.arg.int({ required: false }),
       },
@@ -93,7 +100,8 @@ export function registerMediaAdminModule() {
       resolve: () => ({
         storage: env.MEDIA_STORAGE,
         maxBytes: Math.floor(env.MEDIA_MAX_MB * 1024 * 1024),
-        acceptedTypes: ACCEPTED_IMAGE_TYPES,
+        maxAudioBytes: Math.floor(env.MEDIA_MAX_AUDIO_MB * 1024 * 1024),
+        acceptedTypes: ACCEPTED_MEDIA_TYPES,
       }),
     }),
   }));

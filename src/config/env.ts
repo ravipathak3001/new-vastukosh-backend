@@ -95,6 +95,8 @@ const schema = z.object({
   // Public base URL the local files are served from. Defaults to this API's own /uploads.
   MEDIA_PUBLIC_URL: z.string().url().optional(),
   MEDIA_MAX_MB: z.coerce.number().positive().max(50).default(10),
+  /** Audio (mantra recordings) gets its own, larger limit. */
+  MEDIA_MAX_AUDIO_MB: z.coerce.number().positive().max(100).default(25),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),

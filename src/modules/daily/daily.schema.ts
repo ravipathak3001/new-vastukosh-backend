@@ -3,9 +3,17 @@ import { LocalizedStringRef } from "../../graphql/common.js";
 import type {
   DailyCardDoc,
   DailyMantraDoc,
+  DailyVastuTipDoc,
   DailyVerseDoc,
 } from "./daily.model.js";
-import { dailyCards, dailyMantra, dailyVerse } from "./daily.service.js";
+import {
+  dailyCards,
+  dailyMantra,
+  dailyVastuTip,
+  dailyVerse,
+  publishedMantras,
+  publishedVastuTips,
+} from "./daily.service.js";
 
 export const DailyMantraRef = builder
   .objectRef<DailyMantraDoc>("DailyMantra")
@@ -21,6 +29,11 @@ export const DailyMantraRef = builder
       audioUrl: t.exposeString("audioUrl", { nullable: true }),
       durationSeconds: t.exposeInt("durationSeconds", { nullable: true }),
       artwork: t.exposeString("artwork", { nullable: true }),
+      weekday: t.int({
+        nullable: true,
+        description: "0 = Sunday … 6 = Saturday — the weekday this mantra is shown on, if any.",
+        resolve: (d) => d.weekday ?? null,
+      }),
       date: t.exposeString("date", { nullable: true }),
       published: t.exposeBoolean("published", {
         authScopes: { permission: "daily.view" },
@@ -64,12 +77,45 @@ export const DailyCardRef = builder
     }),
   });
 
+export const DailyVastuTipRef = builder
+  .objectRef<DailyVastuTipDoc>("DailyVastuTip")
+  .implement({
+    fields: (t) => ({
+      id: t.field({ type: "ID", resolve: (d) => String(d._id) }),
+      key: t.exposeString("key"),
+      area: t.field({ type: LocalizedStringRef, resolve: (d) => d.area }),
+      title: t.field({ type: LocalizedStringRef, resolve: (d) => d.title }),
+      body: t.field({ type: LocalizedStringRef, resolve: (d) => d.body }),
+      icon: t.exposeString("icon", { nullable: true }),
+      image: t.exposeString("image", { nullable: true }),
+      date: t.exposeString("date", { nullable: true }),
+      published: t.exposeBoolean("published", {
+        authScopes: { permission: "daily.view" },
+      }),
+      order: t.exposeInt("order", { authScopes: { permission: "daily.view" } }),
+    }),
+  });
+
 export function registerDailyModule() {
   builder.queryFields((t) => ({
     dailyMantra: t.field({
       type: DailyMantraRef,
       nullable: true,
       resolve: () => dailyMantra(),
+    }),
+    dailyMantras: t.field({
+      type: [DailyMantraRef],
+      description: "All published mantras — weekday ones first (Sunday → Saturday).",
+      resolve: () => publishedMantras(),
+    }),
+    dailyVastuTip: t.field({
+      type: DailyVastuTipRef,
+      nullable: true,
+      resolve: () => dailyVastuTip(),
+    }),
+    vastuTips: t.field({
+      type: [DailyVastuTipRef],
+      resolve: () => publishedVastuTips(),
     }),
     dailyVerse: t.field({
       type: DailyVerseRef,

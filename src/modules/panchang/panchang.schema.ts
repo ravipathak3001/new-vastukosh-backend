@@ -1,8 +1,14 @@
 import { builder } from "../../graphql/builder.js";
 import { LocalizedStringRef } from "../../graphql/common.js";
+import type { Observance } from "./observances.js";
+import { nearestPlace, searchPlaces, type PlaceView } from "./places.js";
 import {
+  getObservances,
   getPanchang,
+  getPanchangMonth,
   getPanchangTimeline,
+  type PanchangDayView,
+  type PanchangMonthView,
   type PanchangView,
   type PanchangAngaView,
   type PanchangKaalaView,
@@ -24,6 +30,21 @@ const PanchangLocationRef = builder
       place: t.exposeString("place", { nullable: true }),
     }),
   });
+
+const ObservanceKindEnum = builder.enumType("PanchangObservanceKind", {
+  values: ["festival", "vrat", "sankranti"] as const,
+});
+
+const PanchangObservanceRef = builder.objectRef<Observance>("PanchangObservance").implement({
+  description:
+    "A vrat, festival or sankranti on a day. Decided by the tithi at the observance's traditional time (sunrise, midday, pradosh, midnight or moonrise); regional calendars can differ by a day in edge years.",
+  fields: (t) => ({
+    key: t.exposeString("key", { description: "Stable id, e.g. `ekadashi`, `diwali`, `sankranti-makara`." }),
+    kind: t.field({ type: ObservanceKindEnum, resolve: (o) => o.kind }),
+    name: t.field({ type: LocalizedStringRef, resolve: (o) => o.name }),
+    about: t.field({ type: LocalizedStringRef, resolve: (o) => o.about, description: "One or two lines on what is observed." }),
+  }),
+});
 
 const PanchangAngaRef = builder.objectRef<PanchangAngaView>("PanchangAnga").implement({
   description:
@@ -108,6 +129,16 @@ const PanchangRef = builder.objectRef<PanchangView>("Panchang").implement({
 
     auspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.auspiciousPeriods }),
     inauspiciousPeriods: t.field({ type: [PanchangKaalaRef], resolve: (p) => p.inauspiciousPeriods }),
+    observances: t.field({
+      type: [PanchangObservanceRef],
+      description: "Vrats, festivals and sankranti falling on this civil day.",
+      resolve: (p) =>
+        getObservances(p.date, {
+          latitude: p.location.latitude,
+          longitude: p.location.longitude,
+          timezone: p.timezone,
+        }),
+    }),
     currentPeriods: t.field({
       type: [PanchangKaalaRef],
       resolve: (p) => p.currentPeriods,
@@ -151,6 +182,56 @@ const PanchangTimelineRef = builder.objectRef<PanchangTimelineView>("PanchangTim
   }),
 });
 
+const PanchangDayTithiRef = builder
+  .objectRef<PanchangDayView["tithi"]>("PanchangDayTithi")
+  .implement({
+    fields: (t) => ({
+      index: t.exposeInt("index", { description: "1–15 Shukla, 16–30 Krishna (30 = Amavasya)." }),
+      name: t.field({ type: LocalizedStringRef, resolve: (x) => x.name }),
+      end: t.field({ type: "DateTime", resolve: (x) => x.end }),
+    }),
+  });
+
+const PanchangDayRef = builder.objectRef<PanchangDayView>("PanchangDay").implement({
+  description: "One day of a month calendar, as it stands at sunrise.",
+  fields: (t) => ({
+    date: t.exposeString("date"),
+    vara: t.field({ type: LocalizedStringRef, resolve: (d) => d.vara }),
+    tithi: t.field({ type: PanchangDayTithiRef, resolve: (d) => d.tithi }),
+    paksha: t.field({ type: LocalizedStringRef, resolve: (d) => d.paksha }),
+    nakshatra: t.field({ type: LocalizedStringRef, resolve: (d) => d.nakshatra }),
+    masa: t.field({ type: LocalizedStringRef, resolve: (d) => d.masa }),
+    sunrise: t.field({ type: "DateTime", resolve: (d) => d.sunrise }),
+    sunset: t.field({ type: "DateTime", resolve: (d) => d.sunset }),
+    moonrise: t.field({ type: "DateTime", nullable: true, resolve: (d) => d.moonrise }),
+    observances: t.field({ type: [PanchangObservanceRef], resolve: (d) => d.observances }),
+  }),
+});
+
+const PanchangMonthRef = builder.objectRef<PanchangMonthView>("PanchangMonth").implement({
+  fields: (t) => ({
+    year: t.exposeInt("year"),
+    month: t.exposeInt("month"),
+    timezone: t.exposeString("timezone"),
+    location: t.field({ type: PanchangLocationRef, resolve: (m) => m.location }),
+    days: t.field({ type: [PanchangDayRef], resolve: (m) => m.days }),
+  }),
+});
+
+const PanchangPlaceRef = builder.objectRef<PlaceView>("PanchangPlace").implement({
+  description: "A town or city with coordinates and timezone (GeoNames, CC BY 4.0).",
+  fields: (t) => ({
+    name: t.exposeString("name"),
+    nameHi: t.exposeString("nameHi", { nullable: true }),
+    region: t.exposeString("region", { nullable: true }),
+    country: t.exposeString("country", { description: "ISO 3166 alpha-2 code." }),
+    countryName: t.exposeString("countryName"),
+    latitude: t.exposeFloat("latitude"),
+    longitude: t.exposeFloat("longitude"),
+    timezone: t.exposeString("timezone"),
+  }),
+});
+
 export function registerPanchangModule() {
   builder.queryFields((t) => ({
     panchang: t.field({
@@ -181,6 +262,41 @@ export function registerPanchangModule() {
           timezone: args.timezone,
           monthSystem: args.monthSystem,
         }),
+    }),
+
+    panchangMonth: t.field({
+      type: PanchangMonthRef,
+      description: "Every day of a Gregorian month at a place (at sunrise), with vrats and festivals. Location defaults to New Delhi.",
+      args: {
+        year: t.arg.int({ required: true }),
+        month: t.arg.int({ required: true, description: "1–12" }),
+        latitude: t.arg.float({ required: false }),
+        longitude: t.arg.float({ required: false }),
+        timezone: t.arg.string({ required: false }),
+        monthSystem: t.arg({ type: MonthSystemEnum, required: false }),
+      },
+      resolve: (_parent, args) => getPanchangMonth(args),
+    }),
+
+    panchangPlaces: t.field({
+      type: [PanchangPlaceRef],
+      description: "Search towns and cities by name (English or Devanagari) — for picking a panchang location.",
+      args: {
+        query: t.arg.string({ required: true }),
+        limit: t.arg.int({ required: false, description: "Default 8, max 20." }),
+      },
+      resolve: (_parent, { query, limit }) => searchPlaces(query, limit ?? 8),
+    }),
+
+    panchangNearestPlace: t.field({
+      type: PanchangPlaceRef,
+      nullable: true,
+      description: "The listed town nearest to a point, e.g. the visitor's device location. Null when nothing is within ~150 km.",
+      args: {
+        latitude: t.arg.float({ required: true }),
+        longitude: t.arg.float({ required: true }),
+      },
+      resolve: (_parent, { latitude, longitude }) => nearestPlace(latitude, longitude),
     }),
 
     panchangTimeline: t.field({

@@ -10,10 +10,11 @@ import { localMediaDir } from "./media.storage.js";
 export const mediaRouter = Router();
 
 /**
- * `POST /media/upload` — one image per request, the raw file as the body.
+ * `POST /media/upload` — one file per request, the raw file as the body.
  *
  *   Authorization: Bearer <access token with media.manage>
- *   Content-Type:  image/jpeg | image/png | image/webp | image/gif | image/avif
+ *   Content-Type:  image/jpeg | png | webp | gif | avif, or audio/mpeg | mp4 | ogg | wav
+ *                  (only a hint — the real type is sniffed from the bytes)
  *   X-Filename:    encodeURIComponent(original file name)
  *   ?folder=products&alt=…   (both optional)
  *
@@ -39,7 +40,7 @@ function requireMediaManager(req: Request, res: Response, next: NextFunction) {
   const payload = scheme?.toLowerCase() === "bearer" && token ? verifyAccessToken(token) : null;
   if (!payload) return sendError(res, new AppError("UNAUTHENTICATED", "Authentication required"));
   if (!payload.permissions.includes("media.manage")) {
-    return sendError(res, new AppError("FORBIDDEN", "You don't have access to upload images"));
+    return sendError(res, new AppError("FORBIDDEN", "You don't have access to upload media"));
   }
   res.locals.userId = payload.sub;
   next();
@@ -58,7 +59,11 @@ mediaRouter.post(
   "/media/upload",
   uploadLimiter,
   requireMediaManager,
-  express.raw({ type: () => true, limit: Math.ceil(env.MEDIA_MAX_MB * 1024 * 1024) }),
+  // Ceiling = the larger of the image / audio limits; uploadMedia applies the per-type one.
+  express.raw({
+    type: () => true,
+    limit: Math.ceil(Math.max(env.MEDIA_MAX_MB, env.MEDIA_MAX_AUDIO_MB) * 1024 * 1024),
+  }),
   async (req, res) => {
     try {
       const asset = await uploadMedia({
@@ -89,10 +94,11 @@ mediaRouter.post(
   },
 );
 
-// Body over MEDIA_MAX_MB → express.raw throws 413 before our handler runs.
+// Body over the ceiling → express.raw throws 413 before our handler runs.
 mediaRouter.use("/media/upload", (err: { type?: string }, _req: Request, res: Response, next: NextFunction) => {
   if (err?.type === "entity.too.large") {
-    return sendError(res, new AppError("BAD_INPUT", `Images must be ${env.MEDIA_MAX_MB} MB or smaller`));
+    const mb = Math.max(env.MEDIA_MAX_MB, env.MEDIA_MAX_AUDIO_MB);
+    return sendError(res, new AppError("BAD_INPUT", `Files must be ${mb} MB or smaller`));
   }
   next(err);
 });

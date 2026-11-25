@@ -7,7 +7,7 @@ import { ALL_PERMISSION_KEYS } from "../src/modules/roles/permission-catalog.js"
 import { ProductModel } from "../src/modules/catalog/product.model.js";
 import { MediaAssetModel } from "../src/modules/media/media.model.js";
 import { cloudinarySignature, setMediaStorage, type MediaStorage } from "../src/modules/media/media.storage.js";
-import { imageDimensions, sniffImageType } from "../src/modules/media/media.service.js";
+import { imageDimensions, sniffAudioType, sniffImageType } from "../src/modules/media/media.service.js";
 import { makeExecutor, resetDb, startTestDb, stopTestDb } from "./helpers.js";
 
 /** In-memory provider so tests never touch disk or Cloudinary. */
@@ -35,6 +35,9 @@ const JPEG = Buffer.concat([
   Buffer.alloc(16),
   Buffer.from("ffd9", "hex"),
 ]);
+
+// ID3-tagged MP3 header (+ padding).
+const MP3 = Buffer.concat([Buffer.from("ID3"), Buffer.from("0400000000", "hex"), Buffer.alloc(24)]);
 
 const token = (permissions: string[]) =>
   `Bearer ${signAccessToken({ sub: "000000000000000000000001", roles: ["admin"], permissions })}`;
@@ -77,6 +80,18 @@ describe("image sniffing", () => {
     expect(sniffImageType(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>"))).toBeNull();
   });
 
+  it("recognises audio by its bytes", () => {
+    expect(sniffAudioType(MP3)).toBe("audio/mpeg");
+    expect(sniffAudioType(Buffer.concat([Buffer.from("fffb9064", "hex"), Buffer.alloc(16)]))).toBe("audio/mpeg");
+    expect(sniffAudioType(Buffer.concat([Buffer.from("OggS"), Buffer.alloc(16)]))).toBe("audio/ogg");
+    expect(sniffAudioType(Buffer.concat([Buffer.from("RIFF0000WAVE"), Buffer.alloc(8)]))).toBe("audio/wav");
+    expect(sniffAudioType(Buffer.concat([Buffer.from("00000020", "hex"), Buffer.from("ftypM4A "), Buffer.alloc(8)]))).toBe("audio/mp4");
+    // ADTS AAC (layer bits 00) and images are not audio.
+    expect(sniffAudioType(Buffer.concat([Buffer.from("fff15080", "hex"), Buffer.alloc(16)]))).toBeNull();
+    expect(sniffAudioType(JPEG)).toBeNull();
+    expect(sniffAudioType(PNG)).toBeNull();
+  });
+
   it("signs Cloudinary params the documented way", () => {
     // Example from Cloudinary's "Generating authentication signatures" docs.
     expect(
@@ -106,6 +121,13 @@ describe("POST /media/upload", () => {
     expect(res.status).toBe(201);
     expect(res.body.asset.contentType).toBe("image/jpeg");
     expect(res.body.asset.url).toMatch(/\.jpg$/);
+  });
+
+  it("accepts mantra audio and stores it with no pixel size", async () => {
+    const res = await upload(MP3, { folder: "daily", filename: "Hanuman Mantra.mp3" });
+    expect(res.status).toBe(201);
+    expect(res.body.asset).toMatchObject({ contentType: "audio/mpeg", width: null, height: null, folder: "daily" });
+    expect(res.body.asset.url).toMatch(/daily\/.+-hanuman-mantra\.mp3$/);
   });
 
   it("rejects non-images, unknown folders, and callers without media.manage", async () => {

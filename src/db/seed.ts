@@ -24,6 +24,7 @@ import {
 import {
   DailyCardModel,
   DailyMantraModel,
+  DailyVastuTipModel,
   DailyVerseModel,
 } from "../modules/daily/daily.model.js";
 import { SiteSettingsModel } from "../modules/seo/site-settings.model.js";
@@ -37,6 +38,8 @@ import {
   dailyCardSeeds,
   dailyMantraSeeds,
   dailyVerseSeeds,
+  vastuTipSeeds,
+  weekdayMantraSeeds,
 } from "./seeds/daily.js";
 import {
   faqSeeds,
@@ -108,6 +111,8 @@ async function main() {
   await upsertMany(ConsultationServiceModel, consultationServiceSeeds, "key");
   await upsertMany(PoojaServiceModel, poojaServiceSeeds, "slug");
   await upsertMany(DailyMantraModel, dailyMantraSeeds, "key");
+  await upsertMany(DailyMantraModel, weekdayMantraSeeds, "key");
+  await upsertMany(DailyVastuTipModel, vastuTipSeeds, "key");
   await upsertMany(DailyVerseModel, dailyVerseSeeds, "key");
   await upsertMany(DailyCardModel, dailyCardSeeds, "key");
   await SiteSettingsModel.updateOne(
@@ -158,6 +163,7 @@ async function main() {
     dailyMantras: await DailyMantraModel.countDocuments(),
     dailyVerses: await DailyVerseModel.countDocuments(),
     dailyCards: await DailyCardModel.countDocuments(),
+    dailyVastuTips: await DailyVastuTipModel.countDocuments(),
   };
   logger.info(counts, "Seed complete");
 

@@ -2,6 +2,7 @@ import { computePanchanga, type Anga, type Panchanga } from "vedic-panchanga";
 import { env } from "../../config/env.js";
 import { badInput } from "../../shared/errors.js";
 import type { LocalizedString } from "../../shared/localized.js";
+import { observancesFor, type Observance } from "./observances.js";
 
 /**
  * Thin wrapper over `vedic-panchanga`. Resolves defaults from env, reshapes
@@ -84,6 +85,23 @@ export type PanchangArgs = {
 type NameLike = { iast: string; devanagari: string };
 const localized = (n: NameLike): LocalizedString => ({ en: n.iast, hi: n.devanagari });
 
+/**
+ * Memo caches are bounded: visitors can ask for any place and date, so an
+ * unbounded Map would grow forever. Maps keep insertion order, so the first
+ * key is the oldest.
+ */
+const MAX_ENTRIES = 3000;
+function remember<V>(map: Map<string, { at: number; value: V }>, key: string, value: V): V {
+  map.delete(key);
+  map.set(key, { at: Date.now(), value });
+  while (map.size > MAX_ENTRIES) map.delete(map.keys().next().value as string);
+  return value;
+}
+function recall<V>(map: Map<string, { at: number; value: V }>, key: string): V | undefined {
+  const hit = map.get(key);
+  return hit && Date.now() - hit.at < TTL_MS ? hit.value : undefined;
+}
+
 const memo = new Map<string, { at: number; value: PanchangView }>();
 
 function isoDateOf(date: Date): string {
@@ -93,8 +111,12 @@ function isoDateOf(date: Date): string {
 }
 
 function resolveLocation(args: PanchangArgs) {
-  const latitude = args.latitude ?? env.PANCHANG_DEFAULT_LAT;
-  const longitude = args.longitude ?? env.PANCHANG_DEFAULT_LNG;
+  // ~10 m precision: plenty for sunrise times, and keeps cache keys bounded.
+  const round = (v: number) => Math.round(v * 1e4) / 1e4;
+  const latitude = round(args.latitude ?? env.PANCHANG_DEFAULT_LAT);
+  const longitude = round(args.longitude ?? env.PANCHANG_DEFAULT_LNG);
+  if (latitude < -66 || latitude > 66) throw badInput("Panchang is only available between latitudes 66°S and 66°N");
+  if (longitude < -180 || longitude > 180) throw badInput("longitude must be between -180 and 180");
   const timezone = args.timezone ?? env.PANCHANG_DEFAULT_TZ;
   const monthSystem = args.monthSystem ?? "amanta";
 
@@ -131,8 +153,8 @@ export function getPanchang(args: PanchangArgs): PanchangView {
 
   const dayKey = isoDateOf(date);
   const key = `${dayKey}|${time ?? ""}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
-  const hit = memo.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  const hit = recall(memo, key);
+  if (hit) return hit;
 
   let result: Panchanga;
   try {
@@ -141,9 +163,7 @@ export function getPanchang(args: PanchangArgs): PanchangView {
     throw badInput(err instanceof Error ? err.message : "Could not compute panchang");
   }
 
-  const view = toView(result, place);
-  memo.set(key, { at: Date.now(), value: view });
-  return view;
+  return remember(memo, key, toView(result, place));
 }
 
 function toAngaView(a: Panchanga["tithi"] | Panchanga["nakshatra"]): PanchangAngaView {
@@ -291,8 +311,8 @@ export function getPanchangTimeline(args: PanchangArgs): PanchangTimelineView {
 
   const dayKey = isoDateOf(date);
   const key = `timeline|${dayKey}|${latitude}|${longitude}|${timezone}|${monthSystem}`;
-  const hit = timelineMemo.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  const hit = recall(timelineMemo, key);
+  if (hit) return hit;
 
   let base: Panchanga;
   try {
@@ -319,6 +339,108 @@ export function getPanchangTimeline(args: PanchangArgs): PanchangTimelineView {
     auspiciousPeriods: base.auspiciousPeriods.map(toKaalaView),
     inauspiciousPeriods: base.inauspiciousPeriods.map(toKaalaView),
   };
-  timelineMemo.set(key, { at: Date.now(), value: view });
-  return view;
+  return remember(timelineMemo, key, view);
+}
+
+// ─── Vrats, festivals and the month calendar ────────────────────────────────
+
+type Place = { latitude: number; longitude: number; timezone: string };
+
+const rawMemo = new Map<string, { at: number; value: Panchanga }>();
+
+/** Raw library result (amanta) for a civil date, optionally at a wall-clock time. */
+function rawPanchang(date: string, place: Place, time?: string): Panchanga {
+  const key = `${date}|${time ?? ""}|${place.latitude}|${place.longitude}|${place.timezone}`;
+  const hit = recall(rawMemo, key);
+  if (hit) return hit;
+  const value = computePanchanga({
+    date: new Date(`${date}T12:00:00Z`),
+    time,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    timezone: place.timezone,
+    monthSystem: "amanta",
+  });
+  return remember(rawMemo, key, value);
+}
+
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const observanceMemo = new Map<string, { at: number; value: Observance[] }>();
+
+/** The vrats / festivals / sankranti falling on a civil date at a place. */
+export function getObservances(date: string, place: Place): Observance[] {
+  const key = `${date}|${place.latitude}|${place.longitude}|${place.timezone}`;
+  const hit = recall(observanceMemo, key);
+  if (hit) return hit;
+  const at = (instant: Date) => {
+    const { date: d, time } = wallClockParts(instant, place.timezone);
+    return rawPanchang(d, place, time);
+  };
+  const value = observancesFor({
+    today: rawPanchang(date, place),
+    yesterday: rawPanchang(shiftDate(date, -1), place),
+    tomorrow: rawPanchang(shiftDate(date, 1), place),
+    at,
+  });
+  return remember(observanceMemo, key, value);
+}
+
+export type PanchangDayView = {
+  date: string;
+  vara: LocalizedString;
+  tithi: { index: number; name: LocalizedString; end: Date };
+  paksha: LocalizedString;
+  nakshatra: LocalizedString;
+  masa: LocalizedString;
+  sunrise: Date;
+  sunset: Date;
+  moonrise: Date | null;
+  observances: Observance[];
+};
+
+export type PanchangMonthView = {
+  year: number;
+  month: number;
+  timezone: string;
+  location: { latitude: number; longitude: number; place: string | null };
+  days: PanchangDayView[];
+};
+
+export type PanchangMonthArgs = Omit<PanchangArgs, "date" | "time"> & { year: number; month: number };
+
+/** Every day of a Gregorian month at a place, at sunrise, with its observances. */
+export function getPanchangMonth(args: PanchangMonthArgs): PanchangMonthView {
+  if (!Number.isInteger(args.year) || args.year < 1900 || args.year > 2100) throw badInput("year must be 1900–2100");
+  if (!Number.isInteger(args.month) || args.month < 1 || args.month > 12) throw badInput("month must be 1–12");
+  const { latitude, longitude, timezone, monthSystem, place } = resolveLocation(args);
+  const loc: Place = { latitude, longitude, timezone };
+  const days = new Date(Date.UTC(args.year, args.month, 0)).getUTCDate();
+
+  const out: PanchangDayView[] = [];
+  try {
+    for (let d = 1; d <= days; d++) {
+      const date = `${args.year}-${String(args.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const p = rawPanchang(date, loc);
+      out.push({
+        date,
+        vara: localized(p.vara.name),
+        tithi: { index: p.tithi.index, name: localized(p.tithi.name), end: p.tithi.end },
+        paksha: localized(p.paksha),
+        nakshatra: localized(p.nakshatra.name),
+        masa: localized(monthSystem === "purnimanta" ? p.masaPurnimanta : p.masaAmanta),
+        sunrise: p.sunrise,
+        sunset: p.sunset,
+        moonrise: p.moonrise,
+        observances: getObservances(date, loc),
+      });
+    }
+  } catch (err) {
+    throw badInput(err instanceof Error ? err.message : "Could not compute panchang");
+  }
+  return { year: args.year, month: args.month, timezone, location: { latitude, longitude, place }, days: out };
 }

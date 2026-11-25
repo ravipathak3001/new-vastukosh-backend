@@ -7,7 +7,7 @@ import { ProductModel } from "../catalog/product.model.js";
 import { CollectionModel } from "../catalog/collection.model.js";
 import { RashiModel } from "../catalog/rashi.model.js";
 import { TestimonialModel } from "../content/content.model.js";
-import { DailyCardModel } from "../daily/daily.model.js";
+import { DailyCardModel, DailyMantraModel, DailyVastuTipModel } from "../daily/daily.model.js";
 import { PoojaServiceModel } from "../consultation/consultation.model.js";
 import { ExpertProfileModel } from "../expert/expert.model.js";
 import { MEDIA_FOLDERS, MediaAssetModel, type MediaAssetDoc, type MediaFolder } from "./media.model.js";
@@ -16,19 +16,38 @@ import { getMediaStorage } from "./media.storage.js";
 // ─── File checks ──────────────────────────────────────────────────────────
 
 /**
- * Raster formats only. SVG is deliberately excluded: it can carry script, and
- * these files are served from a domain the site trusts.
+ * Raster images and common audio formats (mantra recordings). SVG is
+ * deliberately excluded: it can carry script, and these files are served from
+ * a domain the site trusts.
  */
-const FORMATS = {
+const IMAGE_FORMATS = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
   "image/avif": "avif",
 } as const;
-type ImageType = keyof typeof FORMATS;
+const AUDIO_FORMATS = {
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+} as const;
+const FORMATS = { ...IMAGE_FORMATS, ...AUDIO_FORMATS } as const;
+type ImageType = keyof typeof IMAGE_FORMATS;
+type AudioType = keyof typeof AUDIO_FORMATS;
+export type MediaType = ImageType | AudioType;
 
-export const ACCEPTED_IMAGE_TYPES = Object.keys(FORMATS) as ImageType[];
+export const ACCEPTED_IMAGE_TYPES = Object.keys(IMAGE_FORMATS) as ImageType[];
+export const ACCEPTED_AUDIO_TYPES = Object.keys(AUDIO_FORMATS) as AudioType[];
+export const ACCEPTED_MEDIA_TYPES = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_AUDIO_TYPES];
+
+export const isAudioType = (type: string): type is AudioType => type.startsWith("audio/");
+
+/** Largest upload allowed for this kind of file, in bytes. */
+export function maxBytesFor(type: MediaType): number {
+  return (isAudioType(type) ? env.MEDIA_MAX_AUDIO_MB : env.MEDIA_MAX_MB) * 1024 * 1024;
+}
 
 /** Identify the format from the file's own bytes — the browser-sent Content-Type is only a hint. */
 export function sniffImageType(buf: Buffer): ImageType | null {
@@ -39,6 +58,24 @@ export function sniffImageType(buf: Buffer): ImageType | null {
   if (buf.toString("ascii", 0, 4) === "GIF8") return "image/gif";
   if (buf.toString("ascii", 4, 8) === "ftyp" && /^avi[fs]$/.test(buf.toString("ascii", 8, 12))) return "image/avif";
   return null;
+}
+
+/** Audio format from the file's own bytes, or null. */
+export function sniffAudioType(buf: Buffer): AudioType | null {
+  if (buf.length < 12) return null;
+  if (buf.toString("ascii", 0, 3) === "ID3") return "audio/mpeg";
+  // Bare MPEG frame sync; layer bits 00 would be AAC/ADTS, which we don't accept.
+  if (buf[0] === 0xff && (buf[1]! & 0xe0) === 0xe0 && ((buf[1]! >> 1) & 0x03) !== 0) return "audio/mpeg";
+  if (buf.toString("ascii", 0, 4) === "OggS") return "audio/ogg";
+  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WAVE") return "audio/wav";
+  if (buf.toString("ascii", 4, 8) === "ftyp" && /^(M4A |M4B |mp42|isom)$/.test(buf.toString("ascii", 8, 12))) {
+    return "audio/mp4";
+  }
+  return null;
+}
+
+export function sniffMediaType(buf: Buffer): MediaType | null {
+  return sniffImageType(buf) ?? sniffAudioType(buf);
 }
 
 /** Pixel size from the file header (best effort — null when the layout isn't recognised). */
@@ -107,12 +144,19 @@ export type UploadInput = {
 };
 
 export async function uploadMedia(input: UploadInput): Promise<MediaAssetDoc> {
-  const maxBytes = env.MEDIA_MAX_MB * 1024 * 1024;
   if (!input.body?.length) throw badInput("The file is empty");
-  if (input.body.length > maxBytes) throw badInput(`Images must be ${env.MEDIA_MAX_MB} MB or smaller`);
 
-  const type = sniffImageType(input.body);
-  if (!type) throw badInput("Only JPG, PNG, WebP, GIF or AVIF images can be uploaded");
+  const type = sniffMediaType(input.body);
+  if (!type) {
+    throw badInput("Only JPG, PNG, WebP, GIF or AVIF images, or MP3, M4A, OGG or WAV audio, can be uploaded");
+  }
+  if (input.body.length > maxBytesFor(type)) {
+    throw badInput(
+      isAudioType(type)
+        ? `Audio files must be ${env.MEDIA_MAX_AUDIO_MB} MB or smaller`
+        : `Images must be ${env.MEDIA_MAX_MB} MB or smaller`,
+    );
+  }
 
   const folder = input.folder?.trim() || "general";
   if (!isMediaFolder(folder)) throw badInput(`Unknown folder "${folder}"`);
@@ -123,7 +167,7 @@ export async function uploadMedia(input: UploadInput): Promise<MediaAssetDoc> {
 
   const storage = getMediaStorage();
   const stored = await storage.put({ key, ext, contentType: type, body: input.body });
-  const dims = imageDimensions(input.body, type);
+  const dims = isAudioType(type) ? null : imageDimensions(input.body, type);
 
   try {
     return await MediaAssetModel.create({
@@ -141,19 +185,25 @@ export async function uploadMedia(input: UploadInput): Promise<MediaAssetDoc> {
     });
   } catch (err) {
     // Don't leave an orphaned file the library can't see.
-    await storage.remove(stored.storageKey).catch(() => undefined);
+    await storage.remove(stored.storageKey, type).catch(() => undefined);
     throw err;
   }
 }
 
 // ─── Library ──────────────────────────────────────────────────────────────
 
-export type MediaListArgs = PageArgs & { search?: string | null; folder?: string | null };
+export type MediaListArgs = PageArgs & {
+  search?: string | null;
+  folder?: string | null;
+  /** Only images or only audio. */
+  kind?: "image" | "audio" | null;
+};
 
 export async function listMedia(args: MediaListArgs): Promise<Paged<MediaAssetDoc>> {
   const paging = resolvePaging(args);
   const filter: Record<string, unknown> = {};
   if (args.folder) filter.folder = args.folder;
+  if (args.kind) filter.contentType = new RegExp(`^${args.kind}/`);
   if (args.search?.trim()) {
     const re = searchRegex(args.search);
     filter.$or = [{ filename: re }, { alt: re }, { url: re }];
@@ -247,6 +297,22 @@ const USAGE_SOURCES: UsageSource[] = [
     ref: (d) => String(d._id),
   },
   {
+    kind: "Daily mantra",
+    model: DailyMantraModel,
+    fields: ["audioUrl", "artwork"],
+    select: "key title",
+    label: (d) => (d.title as Localized)?.en || d.key,
+    ref: (d) => String(d._id),
+  },
+  {
+    kind: "Vastu tip",
+    model: DailyVastuTipModel,
+    fields: ["image"],
+    select: "key title",
+    label: (d) => (d.title as Localized)?.en || d.key,
+    ref: (d) => String(d._id),
+  },
+  {
     kind: "Pooja",
     model: PoojaServiceModel,
     fields: ["image"],
@@ -300,7 +366,7 @@ export async function deleteMedia(id: string, force = false): Promise<boolean> {
 
   // Only the provider that stored it can delete it (e.g. local files after switching to Cloudinary).
   const storage = getMediaStorage();
-  if (storage.name === asset.storage) await storage.remove(asset.storageKey);
+  if (storage.name === asset.storage) await storage.remove(asset.storageKey, asset.contentType);
   await asset.deleteOne();
   return true;
 }

@@ -12,6 +12,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "seed": "tsx src/db/seed.ts",
+    "seed:daily": "tsx src/db/seed-daily.ts",
     "google:auth": "tsx src/scripts/google-auth.ts",
     "print-schema": "tsx src/graphql/print-schema.ts",
     "check-schema": "tsx src/graphql/check-schema.ts",

@@ -1,14 +1,17 @@
 import { builder } from "../../graphql/builder.js";
-import { DailyCardRef, DailyMantraRef, DailyVerseRef } from "./daily.schema.js";
+import { DailyCardRef, DailyMantraRef, DailyVastuTipRef, DailyVerseRef } from "./daily.schema.js";
 import {
   deleteCard,
   deleteMantra,
+  deleteVastuTip,
   deleteVerse,
   listCardsForAdmin,
   listMantrasForAdmin,
+  listVastuTipsForAdmin,
   listVersesForAdmin,
   upsertCard,
   upsertMantra,
+  upsertVastuTip,
   upsertVerse,
 } from "./daily.service.js";
 
@@ -23,6 +26,8 @@ const DailyMantraInput = builder.inputType("DailyMantraInput", {
     audioUrl: t.string({ required: false }),
     durationSeconds: t.int({ required: false }),
     artwork: t.string({ required: false }),
+    /** 0 = Sunday … 6 = Saturday; null clears it. */
+    weekday: t.int({ required: false }),
     date: t.string({ required: false }),
     order: t.int({ required: false }),
     published: t.boolean({ required: false }),
@@ -54,6 +59,20 @@ const DailyCardInput = builder.inputType("DailyCardInput", {
   }),
 });
 
+const DailyVastuTipInput = builder.inputType("DailyVastuTipInput", {
+  fields: (t) => ({
+    key: t.string({ required: true }),
+    area: t.field({ type: "JSON", required: false }),
+    title: t.field({ type: "JSON", required: false }),
+    body: t.field({ type: "JSON", required: false }),
+    icon: t.string({ required: false }),
+    image: t.string({ required: false }),
+    date: t.string({ required: false }),
+    order: t.int({ required: false }),
+    published: t.boolean({ required: false }),
+  }),
+});
+
 export function registerDailyAdminModule() {
   builder.queryFields((t) => ({
     adminDailyMantras: t.field({
@@ -65,6 +84,11 @@ export function registerDailyAdminModule() {
       type: [DailyVerseRef],
       authScopes: { permission: "daily.view" },
       resolve: () => listVersesForAdmin(),
+    }),
+    adminDailyVastuTips: t.field({
+      type: [DailyVastuTipRef],
+      authScopes: { permission: "daily.view" },
+      resolve: () => listVastuTipsForAdmin(),
     }),
     adminDailyCards: t.field({
       type: [DailyCardRef],
@@ -98,6 +122,19 @@ export function registerDailyAdminModule() {
       authScopes: { permission: "daily.manage" },
       args: { key: t.arg.string({ required: true }) },
       resolve: (_p, { key }) => deleteVerse(key),
+    }),
+
+    upsertDailyVastuTip: t.field({
+      type: DailyVastuTipRef,
+      authScopes: { permission: "daily.manage" },
+      args: { input: t.arg({ type: DailyVastuTipInput, required: true }) },
+      resolve: (_p, { input }) => upsertVastuTip(input as never),
+    }),
+    deleteDailyVastuTip: t.field({
+      type: "Boolean",
+      authScopes: { permission: "daily.manage" },
+      args: { key: t.arg.string({ required: true }) },
+      resolve: (_p, { key }) => deleteVastuTip(key),
     }),
 
     upsertDailyCard: t.field({
