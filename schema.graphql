@@ -1205,6 +1205,7 @@ type Order {
   shipment: OrderShipment
   shippingAddress: Address
   shippingFee: Float
+  shippingParcel: ShippingParcel
   status: OrderStatus
   subtotal: Float
   timeline: [OrderTimelineEntry!]
@@ -1621,6 +1622,7 @@ input PoojaServiceInput {
 }
 
 type Product {
+  breadthCm: Float
   category: ProductCategory
   currency: String
   description: LocalizedString
@@ -1632,9 +1634,11 @@ type Product {
   Graha slugs (sun, moon, mars, mercury, jupiter, venus, saturn, rahu, ketu) this gemstone/product is associated with.
   """
   grahas: [String!]
+  heightCm: Float
   highlights: [LocalizedString!]
   id: ID
   image: String
+  lengthCm: Float
   mrp: Float
   name: LocalizedString
   needs: [ProductNeed!]
@@ -1650,6 +1654,7 @@ type Product {
   status: ProductStatus
   stockQty: Int
   tagline: LocalizedString
+  weightGrams: Float
 }
 
 enum ProductCategory {
@@ -1677,14 +1682,17 @@ input ProductFilterInput {
 }
 
 input ProductInput {
+  breadthCm: Float
   category: ProductCategory
   description: JSON
   details: [JSON!]
   featured: Boolean
   gallery: [String!]
   grahas: [String!]
+  heightCm: Float
   highlights: [JSON!]
   image: String
+  lengthCm: Float
   mrp: Float
   name: JSON
   needs: [ProductNeed!]
@@ -1698,6 +1706,7 @@ input ProductInput {
   status: ProductStatus
   stockQty: Int
   tagline: JSON
+  weightGrams: Float
 }
 
 enum ProductNeed {
@@ -2093,6 +2102,17 @@ input ShippingAutomationSettingsInput {
   autoSchedulePickup: Boolean
   pollEnabled: Boolean
   pollIntervalMinutes: Int
+}
+
+"""
+The parcel `startDelivery` will declare to the carrier, from the products' packed size and weight.
+"""
+type ShippingParcel {
+  breadthCm: Float
+  estimated: [String!]
+  heightCm: Float
+  lengthCm: Float
+  weightKg: Float
 }
 
 input SignupInput {

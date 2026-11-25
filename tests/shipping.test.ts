@@ -238,3 +238,35 @@ describe("shipping automation", () => {
     expect(order!.shipment!.rawStatus).toBe("IN TRANSIT"); // MockShippingProvider.track()'s fixed response
   });
 });
+
+describe("shipping parcel", () => {
+  it("stacks packed boxes and adds weights; missing details fall back to the default unit", async () => {
+    const { combineParcel } = await import("../src/modules/shipping/package.js");
+    const p = combineParcel([
+      { slug: "idol", qty: 2, unit: { weightGrams: 800, lengthCm: 12, breadthCm: 20, heightCm: 8 } },
+      { slug: "coin", qty: 1, unit: { weightGrams: 50, lengthCm: 6, breadthCm: 6, heightCm: 2 } },
+    ]);
+    expect(p).toEqual({ lengthCm: 20, breadthCm: 12, heightCm: 18, weightKg: 1.65, estimated: [] });
+
+    const partial = combineParcel([{ slug: "bare", qty: 1, unit: { weightGrams: 300 } }]);
+    expect(partial).toMatchObject({ lengthCm: 15, breadthCm: 10, heightCm: 10, weightKg: 0.5, estimated: ["bare"] });
+  });
+
+  it("is saved from the product form and shown on the admin order", async () => {
+    await gql(
+      `mutation { upsertProduct(input: { slug: "test-ganesha", weightGrams: 750, lengthCm: 18, breadthCm: 14, heightCm: 22 }) { weightGrams heightCm } }`,
+      {},
+      adminAuth,
+    );
+    const orderNo = await placePackedOrder();
+    const res = await gql(
+      `query($o: String!) { adminOrder(orderNo: $o) { shippingParcel { lengthCm breadthCm heightCm weightKg estimated } } }`,
+      { o: orderNo },
+      adminAuth,
+    );
+    expect(res.errors).toBeUndefined();
+    expect((res.data as any).adminOrder.shippingParcel).toEqual({
+      lengthCm: 22, breadthCm: 18, heightCm: 14, weightKg: 0.75, estimated: [],
+    });
+  });
+});

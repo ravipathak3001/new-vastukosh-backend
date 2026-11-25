@@ -2,6 +2,7 @@ import type { Request } from "express";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import type { OrderDoc } from "../order/order.model.js";
+import { parcelForOrder } from "./package.js";
 
 export type ShipmentResult = {
   providerOrderId: string;
@@ -116,10 +117,9 @@ type CachedToken = { token: string; expiresAt: number };
  * to actually call the API. The auth token is valid ~10 days; cached in memory
  * and re-minted a day early.
  *
- * NOTE: `createShipment` sends placeholder package weight/dimensions since the
- * product catalog doesn't model physical dimensions yet. Wire real per-product
- * weight/dimensions into `catalog` before relying on Shiprocket's own rate
- * calculation — until then every shipment quotes as a uniform small parcel.
+ * `createShipment` declares the parcel from each product's packed weight and
+ * box size (set in the admin product form) — see `package.ts`. Products
+ * without them count as a 500 g, 15×10×10 cm unit and are logged.
  */
 export class ShiprocketProvider implements ShippingProvider {
   readonly name = "shiprocket";
@@ -167,6 +167,13 @@ export class ShiprocketProvider implements ShippingProvider {
       throw new Error("SHIPROCKET_PICKUP_LOCATION is not set");
     }
     const addr = order.shippingAddress;
+    const parcel = await parcelForOrder(order.items);
+    if (parcel.estimated.length) {
+      logger.warn(
+        { orderNo: order.orderNo, products: parcel.estimated },
+        "Shipping size/weight missing on products — default parcel used for them",
+      );
+    }
     const orderRes = await this.call<{
       order_id: number;
       shipment_id: number;
@@ -198,11 +205,10 @@ export class ShiprocketProvider implements ShippingProvider {
         })),
         payment_method: order.payment.method === "cod" ? "COD" : "Prepaid",
         sub_total: order.subtotal,
-        // TODO: source real per-product weight/dimensions once the catalog models them.
-        length: 15,
-        breadth: 10,
-        height: 10,
-        weight: 0.5,
+        length: parcel.lengthCm,
+        breadth: parcel.breadthCm,
+        height: parcel.heightCm,
+        weight: parcel.weightKg,
       }),
     });
 

@@ -10,6 +10,7 @@ import {
   updateAutomationSettings,
   verifyOrder,
 } from "./shipping.service.js";
+import { parcelForOrder, type Parcel } from "./package.js";
 
 type ShipmentDoc = NonNullable<OrderDoc["shipment"]>;
 
@@ -46,6 +47,26 @@ const OrderShipmentRef = builder.objectRef<ShipmentDoc>("OrderShipment").impleme
     cancelledAt: t.field({ type: "DateTime", nullable: true, resolve: (s) => s.cancelledAt }),
   }),
 });
+
+const ShippingParcelRef = builder.objectRef<Parcel>("ShippingParcel").implement({
+  description: "The parcel `startDelivery` will declare to the carrier, from the products' packed size and weight.",
+  fields: (t) => ({
+    lengthCm: t.exposeFloat("lengthCm"),
+    breadthCm: t.exposeFloat("breadthCm"),
+    heightCm: t.exposeFloat("heightCm"),
+    weightKg: t.exposeFloat("weightKg"),
+    /** Product slugs with no packed size/weight — a 500 g, 15×10×10 cm default was used for them. */
+    estimated: t.exposeStringList("estimated"),
+  }),
+});
+
+builder.objectField(OrderRef, "shippingParcel", (t) =>
+  t.field({
+    type: ShippingParcelRef,
+    authScopes: { permission: "orders.view" },
+    resolve: (o) => parcelForOrder(o.items),
+  }),
+);
 
 builder.objectField(OrderRef, "verifiedAt", (t) =>
   t.field({ type: "DateTime", nullable: true, authScopes: { permission: "orders.view" }, resolve: (o) => o.verifiedAt }),

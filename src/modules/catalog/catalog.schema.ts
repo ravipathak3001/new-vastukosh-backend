@@ -69,6 +69,12 @@ ProductRef.implement({
     mrp: t.exposeFloat("mrp", { nullable: true }),
     currency: t.exposeString("currency"),
     stockQty: t.exposeInt("stockQty"),
+    /** Packed weight of one unit, in grams (admin-set, used for shipping). */
+    weightGrams: t.exposeFloat("weightGrams", { nullable: true }),
+    /** Packed box size of one unit, in cm. */
+    lengthCm: t.exposeFloat("lengthCm", { nullable: true }),
+    breadthCm: t.exposeFloat("breadthCm", { nullable: true }),
+    heightCm: t.exposeFloat("heightCm", { nullable: true }),
     rating: t.exposeFloat("rating"),
     reviewsCount: t.exposeInt("reviewsCount"),
     category: t.field({ type: ProductCategory, resolve: (p) => p.category as never }),
@@ -195,6 +201,10 @@ const ProductInput = builder.inputType("ProductInput", {
     price: t.float({ required: false }),
     mrp: t.float({ required: false }),
     stockQty: t.int({ required: false }),
+    weightGrams: t.float({ required: false }),
+    lengthCm: t.float({ required: false }),
+    breadthCm: t.float({ required: false }),
+    heightCm: t.float({ required: false }),
     category: t.field({ type: ProductCategory, required: false }),
     status: t.field({ type: ProductStatusEnum, required: false }),
     rashis: t.stringList({ required: false }),

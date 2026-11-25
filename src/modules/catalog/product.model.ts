@@ -43,6 +43,14 @@ const productSchema = new Schema(
     mrp: { type: Number, min: 0 },
     currency: { type: String, enum: ["INR"], default: "INR" },
     stockQty: { type: Number, required: true, min: 0, default: 0 },
+    /**
+     * Shipping: one unit as packed for dispatch (box + padding included).
+     * Optional — `startDelivery` falls back to a default parcel when missing.
+     */
+    weightGrams: { type: Number, min: 0 },
+    lengthCm: { type: Number, min: 0 },
+    breadthCm: { type: Number, min: 0 },
+    heightCm: { type: Number, min: 0 },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     reviewsCount: { type: Number, default: 0, min: 0 },
     category: { type: String, enum: PRODUCT_CATEGORIES, required: true, index: true },
