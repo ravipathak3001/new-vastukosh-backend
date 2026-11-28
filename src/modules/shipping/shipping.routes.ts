@@ -18,6 +18,9 @@ shippingRouter.post("/webhooks/shiprocket", express.json(), async (req, res) => 
     return res.status(400).json({ error: result.reason });
   }
 
-  await syncShipmentStatus(result.awbCode, result.rawStatus, result.delivered);
+  await syncShipmentStatus(result.awbCode, result.rawStatus, result.delivered, {
+    orderNo: result.orderNo,
+    courierName: result.courierName,
+  });
   res.json({ received: true });
 });

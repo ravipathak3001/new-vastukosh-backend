@@ -11,7 +11,39 @@ export type ShipmentResult = {
   courierId: string;
   courierName: string;
   trackingUrl: string;
+  /**
+   * Set when the carrier created the shipment but could not assign an AWB
+   * (Shiprocket answers 200 with an empty AWB, e.g. low wallet balance or no
+   * courier for the pincode). `awbCode` is then "" and the AWB is picked up
+   * later by the poller / webhook once it is assigned (e.g. from the dashboard).
+   */
+  awbError?: string;
 };
+
+/** What the carrier currently holds for a shipment — used to backfill a late AWB. */
+export type ShipmentAwb = {
+  awbCode: string;
+  courierId: string;
+  courierName: string;
+  trackingUrl: string;
+  /** Set when a pickup was already requested at the carrier (e.g. from its dashboard). */
+  pickupScheduledDate?: Date | null;
+};
+
+/**
+ * The carrier rejected a request. `carrierMessage` is the carrier's own reason,
+ * safe to show to admins (the service turns it into a BAD_INPUT error).
+ */
+export class CarrierError extends Error {
+  constructor(
+    readonly carrier: string,
+    readonly carrierMessage: string,
+    detail: string,
+  ) {
+    super(detail);
+    this.name = "CarrierError";
+  }
+}
 
 export type ReturnShipmentInput = {
   returnNo: string;
@@ -38,6 +70,9 @@ export type ShipmentWebhookResult =
       ok: true;
       awbCode: string;
       rawStatus: string;
+      /** Our order number (Shiprocket's channel `order_id`), when the payload carries it. */
+      orderNo?: string;
+      courierName?: string;
       /** True when the carrier's status maps to a fully delivered parcel. */
       delivered: boolean;
     }
@@ -57,6 +92,8 @@ export interface ShippingProvider {
   schedulePickup(shipmentId: string): Promise<PickupResult>;
   generateLabel(shipmentId: string): Promise<{ labelUrl: string }>;
   track(awbCode: string): Promise<TrackingResult>;
+  /** The AWB the carrier holds for a shipment now, or null if none is assigned yet. */
+  getShipmentAwb(shipmentId: string): Promise<ShipmentAwb | null>;
   cancelShipment(shipmentId: string): Promise<void>;
   verifyWebhook(req: Request): ShipmentWebhookResult;
 }
@@ -99,6 +136,10 @@ export class MockShippingProvider implements ShippingProvider {
     return { rawStatus: "IN TRANSIT", expectedDeliveryDate: null };
   }
 
+  async getShipmentAwb(): Promise<ShipmentAwb | null> {
+    return null;
+  }
+
   async cancelShipment(): Promise<void> {
     // no-op
   }
@@ -109,6 +150,55 @@ export class MockShippingProvider implements ShippingProvider {
 }
 
 const BASE_URL = "https://apiv2.shiprocket.in/v1/external";
+
+/** Shiprocket dates are "YYYY-MM-DD HH:mm:ss" in IST. */
+function parseShiprocketDate(value: string | null | undefined): Date | null {
+  const m = value?.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (!m) return null;
+  const d = new Date(`${m[1]}T${m[2]}+05:30`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function trackingUrlFor(awbCode: string): string {
+  return awbCode ? `https://shiprocket.co/tracking/${awbCode}` : "";
+}
+
+/**
+ * `/courier/assign/awb` answers HTTP 200 even when it assigns nothing: then
+ * `awb_assign_status` is 0 and `response.data.awb_assign_error` says why.
+ */
+type AssignAwbResponse = {
+  awb_assign_status?: number;
+  message?: string;
+  response?: {
+    data?: {
+      awb_code?: string;
+      courier_company_id?: number;
+      courier_name?: string;
+      awb_assign_error?: string;
+    };
+  };
+};
+
+function readAssignedAwb(
+  res: AssignAwbResponse,
+  ref: string,
+): Omit<ShipmentResult, "providerOrderId" | "shipmentId"> {
+  const data = res.response?.data ?? {};
+  const awbCode = (data.awb_code ?? "").trim();
+  if (!awbCode) {
+    const awbError =
+      data.awb_assign_error || res.message || "Shiprocket did not assign an AWB";
+    logger.warn({ ref, awbError }, "Shiprocket created the shipment but assigned no AWB");
+    return { awbCode: "", courierId: "", courierName: "", trackingUrl: "", awbError };
+  }
+  return {
+    awbCode,
+    courierId: data.courier_company_id != null ? String(data.courier_company_id) : "",
+    courierName: data.courier_name ?? "",
+    trackingUrl: trackingUrlFor(awbCode),
+  };
+}
 
 type CachedToken = { token: string; expiresAt: number };
 
@@ -157,7 +247,18 @@ export class ShiprocketProvider implements ShippingProvider {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(`Shiprocket ${path} failed: ${res.status} ${JSON.stringify(body)}`);
+      const b = body as { message?: unknown; errors?: unknown };
+      const carrierMessage =
+        typeof b.message === "string" && b.message
+          ? b.message
+          : b.errors
+            ? JSON.stringify(b.errors)
+            : `HTTP ${res.status}`;
+      throw new CarrierError(
+        "Shiprocket",
+        carrierMessage,
+        `Shiprocket ${path} failed: ${res.status} ${JSON.stringify(body)}`,
+      );
     }
     return body as T;
   }
@@ -212,21 +313,15 @@ export class ShiprocketProvider implements ShippingProvider {
       }),
     });
 
-    const awbRes = await this.call<{
-      response: { data: { awb_code: string; courier_company_id: number; courier_name: string } };
-    }>("/courier/assign/awb", {
+    const awbRes = await this.call<AssignAwbResponse>("/courier/assign/awb", {
       method: "POST",
       body: JSON.stringify({ shipment_id: orderRes.shipment_id }),
     });
 
-    const data = awbRes.response.data;
     return {
       providerOrderId: String(orderRes.order_id),
       shipmentId: String(orderRes.shipment_id),
-      awbCode: data.awb_code,
-      courierId: String(data.courier_company_id),
-      courierName: data.courier_name,
-      trackingUrl: `https://shiprocket.co/tracking/${data.awb_code}`,
+      ...readAssignedAwb(awbRes, order.orderNo),
     };
   }
 
@@ -268,21 +363,15 @@ export class ShiprocketProvider implements ShippingProvider {
       },
     );
 
-    const awbRes = await this.call<{
-      response: { data: { awb_code: string; courier_company_id: number; courier_name: string } };
-    }>("/courier/assign/awb", {
+    const awbRes = await this.call<AssignAwbResponse>("/courier/assign/awb", {
       method: "POST",
       body: JSON.stringify({ shipment_id: orderRes.shipment_id }),
     });
-    const data = awbRes.response.data;
 
     return {
       providerOrderId: String(orderRes.order_id),
       shipmentId: String(orderRes.shipment_id),
-      awbCode: data.awb_code,
-      courierId: String(data.courier_company_id),
-      courierName: data.courier_name,
-      trackingUrl: `https://shiprocket.co/tracking/${data.awb_code}`,
+      ...readAssignedAwb(awbRes, input.returnNo),
     };
   }
 
@@ -313,6 +402,26 @@ export class ShiprocketProvider implements ShippingProvider {
     };
   }
 
+  async getShipmentAwb(shipmentId: string): Promise<ShipmentAwb | null> {
+    const res = await this.call<{
+      data?: {
+        awb?: string;
+        sr_courier_id?: number | string;
+        courier?: string;
+        pickup_generated_date?: string | null;
+      };
+    }>(`/shipments/${shipmentId}`);
+    const awb = res.data?.awb?.trim();
+    if (!awb) return null;
+    return {
+      awbCode: awb,
+      courierId: res.data?.sr_courier_id != null ? String(res.data.sr_courier_id) : "",
+      courierName: res.data?.courier ?? "",
+      trackingUrl: trackingUrlFor(awb),
+      pickupScheduledDate: parseShiprocketDate(res.data?.pickup_generated_date),
+    };
+  }
+
   async cancelShipment(shipmentId: string): Promise<void> {
     await this.call("/orders/cancel", {
       method: "POST",
@@ -326,14 +435,21 @@ export class ShiprocketProvider implements ShippingProvider {
     if (!expected || !provided || provided !== expected) {
       return { ok: false, reason: "missing or invalid webhook token" };
     }
-    const body = req.body as { awb?: string; current_status?: string };
+    const body = req.body as {
+      awb?: string | number;
+      current_status?: string;
+      order_id?: string;
+      courier_name?: string;
+    };
     if (!body?.awb || !body?.current_status) {
       return { ok: false, reason: "missing awb/current_status in payload" };
     }
     return {
       ok: true,
-      awbCode: body.awb,
+      awbCode: String(body.awb),
       rawStatus: body.current_status,
+      orderNo: body.order_id || undefined,
+      courierName: body.courier_name || undefined,
       delivered: isDeliveredStatus(body.current_status),
     };
   }

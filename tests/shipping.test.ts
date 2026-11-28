@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProductModel } from "../src/modules/catalog/product.model.js";
 import { signAccessToken } from "../src/shared/auth/jwt.js";
 import { OrderModel } from "../src/modules/order/order.model.js";
@@ -7,6 +7,7 @@ import {
   syncShipmentStatus,
   updateAutomationSettings,
 } from "../src/modules/shipping/shipping.service.js";
+import { CarrierError, getShippingProvider } from "../src/modules/shipping/shipping.provider.js";
 import { ALL_PERMISSION_KEYS } from "../src/modules/roles/permission-catalog.js";
 import { makeExecutor, resetDb, startTestDb, stopTestDb } from "./helpers.js";
 
@@ -236,6 +237,125 @@ describe("shipping automation", () => {
     order = await OrderModel.findOne({ orderNo });
     expect(order!.shipment!.statusHistory.length).toBeGreaterThan(1);
     expect(order!.shipment!.rawStatus).toBe("IN TRANSIT"); // MockShippingProvider.track()'s fixed response
+  });
+});
+
+describe("AWB not assigned at shipment creation", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function startWithoutAwb(): Promise<string> {
+    const provider = getShippingProvider();
+    vi.spyOn(provider, "createShipment").mockImplementation(async (order) => ({
+      providerOrderId: `sr_${order.orderNo}`,
+      shipmentId: `ship_${order.orderNo}`,
+      awbCode: "",
+      courierId: "",
+      courierName: "",
+      trackingUrl: "",
+      awbError: "Insufficient wallet balance",
+    }));
+    const schedule = vi.spyOn(provider, "schedulePickup");
+    await updateAutomationSettings({ autoSchedulePickup: true });
+
+    const orderNo = await placePackedOrder();
+    await gql(`mutation ($n: String!) { verifyOrder(orderNo: $n) { verifiedAt } }`, { n: orderNo }, adminAuth);
+    const started = await gql(
+      `mutation ($n: String!) { startDelivery(orderNo: $n) { status shipment { awbCode rawStatus trackingUrl } } }`,
+      { n: orderNo },
+      adminAuth,
+    );
+    expect(started.data.startDelivery).toMatchObject({
+      status: "in_transit",
+      shipment: { awbCode: "", rawStatus: "AWB PENDING", trackingUrl: "" },
+    });
+    expect(schedule).not.toHaveBeenCalled(); // no pickup without an AWB
+    const order = await OrderModel.findOne({ orderNo });
+    expect(JSON.stringify(order!.timeline)).toContain("Insufficient wallet balance");
+    return orderNo;
+  }
+
+  it("the poller picks up an AWB assigned later in the carrier dashboard", async () => {
+    const orderNo = await startWithoutAwb();
+    vi.spyOn(getShippingProvider(), "getShipmentAwb").mockResolvedValue({
+      awbCode: "7D000000001",
+      courierId: "6",
+      courierName: "DTDC Surface",
+      trackingUrl: "https://shiprocket.co/tracking/7D000000001",
+    });
+    await updateAutomationSettings({ pollEnabled: true, pollIntervalMinutes: 5 });
+    await pollShipmentStatuses();
+
+    const order = await OrderModel.findOne({ orderNo });
+    expect(order!.shipment).toMatchObject({
+      awbCode: "7D000000001",
+      courierName: "DTDC Surface",
+      trackingUrl: "https://shiprocket.co/tracking/7D000000001",
+    });
+    expect(order!.shipment!.statusHistory.map((h) => h.status)).toContain("AWB ASSIGNED");
+  });
+
+  it("schedule pickup syncs a pickup already booked in the dashboard instead of booking twice", async () => {
+    const orderNo = await startWithoutAwb();
+    const booked = new Date("2026-11-26T15:24:13Z");
+    vi.spyOn(getShippingProvider(), "getShipmentAwb").mockResolvedValue({
+      awbCode: "7D000000003",
+      courierId: "6",
+      courierName: "DTDC Surface",
+      trackingUrl: "https://shiprocket.co/tracking/7D000000003",
+      pickupScheduledDate: booked,
+    });
+    const schedule = vi.spyOn(getShippingProvider(), "schedulePickup");
+
+    const res = await gql(
+      `mutation ($n: String!) { schedulePickup(orderNo: $n) { shipment { awbCode pickupScheduledDate } } }`,
+      { n: orderNo },
+      adminAuth,
+    );
+    expect(res.errors).toBeUndefined();
+    expect(res.data.schedulePickup.shipment.awbCode).toBe("7D000000003");
+    expect(new Date(res.data.schedulePickup.shipment.pickupScheduledDate).getTime()).toBe(booked.getTime());
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it("schedule pickup says why when there is still no AWB", async () => {
+    const orderNo = await startWithoutAwb();
+    vi.spyOn(getShippingProvider(), "getShipmentAwb").mockResolvedValue(null);
+    const res = await gql(
+      `mutation ($n: String!) { schedulePickup(orderNo: $n) { status } }`,
+      { n: orderNo },
+      adminAuth,
+    );
+    expect(res.errors?.[0]?.extensions?.code).toBe("BAD_INPUT");
+    expect(res.errors?.[0]?.message).toMatch(/No AWB/);
+  });
+
+  it("a carrier rejection reaches the admin as its reason, not an internal error", async () => {
+    await updateAutomationSettings({ autoSchedulePickup: false });
+    const orderNo = await placePackedOrder();
+    await gql(`mutation ($n: String!) { verifyOrder(orderNo: $n) { verifiedAt } }`, { n: orderNo }, adminAuth);
+    await gql(`mutation ($n: String!) { startDelivery(orderNo: $n) { status } }`, { n: orderNo }, adminAuth);
+    vi.spyOn(getShippingProvider(), "schedulePickup").mockRejectedValue(
+      new CarrierError("Shiprocket", "Already in Pickup Queue.", "raw detail"),
+    );
+    const res = await gql(
+      `mutation ($n: String!) { schedulePickup(orderNo: $n) { status } }`,
+      { n: orderNo },
+      adminAuth,
+    );
+    expect(res.errors?.[0]?.extensions?.code).toBe("BAD_INPUT");
+    expect(res.errors?.[0]?.message).toBe("Shiprocket couldn't schedule the pickup: Already in Pickup Queue.");
+  });
+
+  it("a webhook for the order fills in the AWB by order number", async () => {
+    const orderNo = await startWithoutAwb();
+    await syncShipmentStatus("7D000000002", "PICKED UP", false, { orderNo, courierName: "DTDC Surface" });
+
+    const order = await OrderModel.findOne({ orderNo });
+    expect(order!.shipment).toMatchObject({
+      awbCode: "7D000000002",
+      courierName: "DTDC Surface",
+      rawStatus: "PICKED UP",
+    });
   });
 });
 

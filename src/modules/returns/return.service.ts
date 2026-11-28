@@ -6,6 +6,7 @@ import { logger } from "../../config/logger.js";
 import { searchRegex } from "../../graphql/admin-common.js";
 import { OrderModel, type OrderDoc } from "../order/order.model.js";
 import { getShippingProvider } from "../shipping/shipping.provider.js";
+import { carrier } from "../shipping/shipping.service.js";
 import { getPaymentProvider } from "../payment/payment.provider.js";
 import { restockItems } from "../catalog/catalog.service.js";
 import { ReturnModel, type ReturnDoc, type ReturnStatus } from "./return.model.js";
@@ -213,12 +214,21 @@ export async function scheduleReturnPickup(returnNo: string): Promise<ReturnDoc>
   if (!order) throw notFound("Order");
 
   const provider = getShippingProvider();
-  const shipment = await provider.createReturnShipment({
-    returnNo: ret.returnNo,
-    order,
-    items: ret.items.map((i) => ({ productSlug: i.productSlug, name: i.name?.en ?? "", qty: i.qty })),
-  });
-  const { pickupScheduledDate } = await provider.schedulePickup(shipment.shipmentId);
+  const shipment = await carrier("create the return pickup", () =>
+    provider.createReturnShipment({
+      returnNo: ret.returnNo,
+      order,
+      items: ret.items.map((i) => ({ productSlug: i.productSlug, name: i.name?.en ?? "", qty: i.qty })),
+    }),
+  );
+  if (!shipment.awbCode) {
+    throw badInput(
+      `${provider.name} created the return shipment but assigned no AWB (${shipment.awbError ?? "no reason given"}) — assign a courier in its dashboard`,
+    );
+  }
+  const { pickupScheduledDate } = await carrier("schedule the return pickup", () =>
+    provider.schedulePickup(shipment.shipmentId),
+  );
 
   ret.shipment = {
     provider: provider.name,

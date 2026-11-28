@@ -2,11 +2,32 @@ import { badInput, notFound } from "../../shared/errors.js";
 import { logger } from "../../config/logger.js";
 import { OrderModel, type OrderDoc, type OrderStatus } from "../order/order.model.js";
 import { advanceStatus } from "../order/order.service.js";
-import { getShippingProvider, isDeliveredStatus } from "./shipping.provider.js";
+import {
+  CarrierError,
+  getShippingProvider,
+  isDeliveredStatus,
+  type ShipmentAwb,
+} from "./shipping.provider.js";
 import {
   ShippingAutomationSettingsModel,
   type ShippingAutomationSettingsDoc,
 } from "./shipping-automation.model.js";
+
+/**
+ * Runs a carrier call; a carrier rejection becomes a BAD_INPUT error carrying
+ * the carrier's reason, so the admin sees it instead of "Internal server error".
+ */
+export async function carrier<T>(action: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof CarrierError) {
+      logger.warn({ err }, `${err.carrier} rejected: ${action}`);
+      throw badInput(`${err.carrier} couldn't ${action}: ${err.carrierMessage}`);
+    }
+    throw err;
+  }
+}
 
 export async function getAutomationSettings(): Promise<ShippingAutomationSettingsDoc> {
   return ShippingAutomationSettingsModel.findOneAndUpdate(
@@ -62,7 +83,8 @@ export async function startDelivery(orderNo: string): Promise<OrderDoc> {
   }
 
   const provider = getShippingProvider();
-  const shipment = await provider.createShipment(order);
+  const shipment = await carrier("create the shipment", () => provider.createShipment(order));
+  const initialStatus = shipment.awbCode ? "AWB ASSIGNED" : "AWB PENDING";
 
   order.shipment = {
     provider: provider.name,
@@ -76,21 +98,25 @@ export async function startDelivery(orderNo: string): Promise<OrderDoc> {
     invoiceUrl: "",
     pickupScheduledDate: null,
     expectedDeliveryDate: null,
-    rawStatus: "AWB ASSIGNED",
-    statusHistory: [{ status: "AWB ASSIGNED", at: new Date() }],
+    rawStatus: initialStatus,
+    statusHistory: [{ status: initialStatus, at: new Date() }],
     cancelledAt: null,
   } as never;
   await order.save();
 
   logger.info({ orderNo, awb: shipment.awbCode, courier: shipment.courierName }, "Shipment created");
+  // The carrier order exists even without an AWB, so the order still moves on;
+  // the poller / webhook fill the AWB in once it is assigned (e.g. from the dashboard).
   const updated = await advanceStatus(
     order,
     "in_transit",
-    `Shipment created via ${provider.name} — AWB ${shipment.awbCode} (${shipment.courierName})`,
+    shipment.awbCode
+      ? `Shipment created via ${provider.name} — AWB ${shipment.awbCode} (${shipment.courierName})`
+      : `Shipment created via ${provider.name} — no AWB assigned yet: ${shipment.awbError ?? "unknown reason"}. Assign it in the ${provider.name} dashboard; it syncs here automatically.`,
   );
 
   const settings = await getAutomationSettings();
-  if (settings.autoSchedulePickup) {
+  if (settings.autoSchedulePickup && shipment.awbCode) {
     try {
       await schedulePickupOn(updated, provider);
     } catch (err) {
@@ -106,7 +132,27 @@ async function schedulePickupOn(
   provider: ReturnType<typeof getShippingProvider>,
 ): Promise<void> {
   if (!order.shipment?.shipmentId) throw badInput("No shipment on this order yet");
-  const { pickupScheduledDate } = await provider.schedulePickup(order.shipment.shipmentId);
+  const shipmentId = order.shipment.shipmentId;
+
+  // The AWB (and maybe the pickup) may have been set up in the carrier dashboard
+  // since creation — sync first, and don't request a pickup twice.
+  if (!order.shipment.awbCode) {
+    const awb = await carrier("look up the shipment", () => provider.getShipmentAwb(shipmentId));
+    if (!awb) {
+      throw badInput(
+        `No AWB is assigned to this shipment yet — assign a courier in the ${provider.name} dashboard first`,
+      );
+    }
+    applyLateAwb(order, awb);
+    if (order.shipment.pickupScheduledDate) {
+      await order.save();
+      return;
+    }
+  }
+
+  const { pickupScheduledDate } = await carrier("schedule the pickup", () =>
+    provider.schedulePickup(shipmentId),
+  );
   order.shipment.pickupScheduledDate = pickupScheduledDate;
   await order.save();
 }
@@ -124,7 +170,8 @@ export async function cancelShipment(orderNo: string, note = ""): Promise<OrderD
   if (!order.shipment?.shipmentId) throw badInput("No shipment on this order to cancel");
 
   const provider = getShippingProvider();
-  await provider.cancelShipment(order.shipment.shipmentId);
+  const shipmentId = order.shipment.shipmentId;
+  await carrier("cancel the shipment", () => provider.cancelShipment(shipmentId));
   order.shipment.cancelledAt = new Date();
   await order.save();
 
@@ -134,13 +181,42 @@ export async function cancelShipment(orderNo: string, note = ""): Promise<OrderD
   return order;
 }
 
+/** Copies an AWB assigned after shipment creation onto the order. */
+function applyLateAwb(
+  order: OrderDoc,
+  awb: Pick<ShipmentAwb, "awbCode"> & Partial<ShipmentAwb>,
+): void {
+  if (!order.shipment) return;
+  if (awb.pickupScheduledDate && !order.shipment.pickupScheduledDate) {
+    order.shipment.pickupScheduledDate = awb.pickupScheduledDate;
+  }
+  order.shipment.awbCode = awb.awbCode;
+  if (awb.courierId) order.shipment.courierId = awb.courierId;
+  if (awb.courierName) order.shipment.courierName = awb.courierName;
+  order.shipment.trackingUrl = awb.trackingUrl || `https://shiprocket.co/tracking/${awb.awbCode}`;
+  order.shipment.rawStatus = "AWB ASSIGNED";
+  order.shipment.statusHistory.push({ status: "AWB ASSIGNED", at: new Date() });
+  logger.info({ orderNo: order.orderNo, awb: awb.awbCode }, "Late AWB synced from carrier");
+}
+
 /** Applied from the carrier webhook (and any future polling fallback). */
 export async function syncShipmentStatus(
   awbCode: string,
   rawStatus: string,
   delivered: boolean,
+  ref: { orderNo?: string; courierName?: string } = {},
 ): Promise<void> {
-  const order = await OrderModel.findOne({ "shipment.awbCode": awbCode });
+  let order = await OrderModel.findOne({ "shipment.awbCode": awbCode });
+  if (!order && ref.orderNo) {
+    // AWB assigned after creation (e.g. from the dashboard): match by order number.
+    order = await OrderModel.findOne({
+      orderNo: ref.orderNo,
+      "shipment.shipmentId": { $ne: "" },
+      "shipment.awbCode": "",
+      "shipment.cancelledAt": null,
+    });
+    if (order) applyLateAwb(order, { awbCode, courierName: ref.courierName });
+  }
   if (!order || !order.shipment) {
     logger.warn({ awbCode }, "Shipment webhook for unknown AWB");
     return;
@@ -174,6 +250,26 @@ export async function pollShipmentStatuses(): Promise<void> {
   await settings.save();
 
   const provider = getShippingProvider();
+
+  // Shipments created without an AWB: pick it up once the carrier has one.
+  const pending = await OrderModel.find({
+    status: "in_transit",
+    "shipment.shipmentId": { $ne: "" },
+    "shipment.awbCode": "",
+    "shipment.cancelledAt": null,
+  });
+  for (const order of pending) {
+    if (!order.shipment?.shipmentId) continue;
+    try {
+      const awb = await provider.getShipmentAwb(order.shipment.shipmentId);
+      if (!awb) continue;
+      applyLateAwb(order, awb);
+      await order.save();
+    } catch (err) {
+      logger.warn({ orderNo: order.orderNo, err }, "Late AWB lookup failed");
+    }
+  }
+
   const orders = await OrderModel.find({
     status: "in_transit",
     "shipment.awbCode": { $ne: "" },
